@@ -1,15 +1,15 @@
-#![allow(dead_code)]
 use std::vec::Vec;
-mod stack;
+pub mod stack;
 
-const SCREEN_WIDTH: u8 = 64;
-const SCREEN_HEIGHT: u8 = 32;
-
-struct Chip {
-    screen_buffer: Vec<bool>,
+pub struct Chip {
+    memory: Vec<u8>,
+    stack: stack::Stack<u16>,
     registers: Vec<u8>,
     address: u16,
-    stack: stack::Stack<u8>,
+    program_counter: u16,
+    screen_buffer: Vec<bool>,
+    screen_width: u8,
+    screen_height: u8,
 }
 
 #[cfg(test)]

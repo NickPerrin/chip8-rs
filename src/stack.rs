@@ -1,7 +1,7 @@
-#![allow(dead_code)]
 use std::io::{Error, ErrorKind};
 use std::vec::Vec;
 
+/// A simple fixed-size stack implementation.
 pub struct Stack<T> {
     pub size: usize,
     pub head: usize,
@@ -9,6 +9,7 @@ pub struct Stack<T> {
 }
 
 impl<T> Stack<T> {
+    /// Create an empty Stack object.
     pub fn default() -> Stack<T> {
         Stack {
             size: 0,
@@ -17,6 +18,11 @@ impl<T> Stack<T> {
         }
     }
 
+    /// Create a stack with a given size
+    ///
+    /// # Arguments
+    ///
+    /// *'size' The size of the stack to be created.
     pub fn new(size: usize) -> Stack<T> {
         Stack {
             size: size,
@@ -25,6 +31,11 @@ impl<T> Stack<T> {
         }
     }
 
+    /// Push an item onto the stack, if there's space
+    ///
+    /// # Arguments
+    ///
+    /// *'item' The item to be pushed onto the stack.
     pub fn push(&mut self, item: T) -> Result<(), Error> {
         if self.head < self.size {
             self.head += 1;
@@ -35,6 +46,7 @@ impl<T> Stack<T> {
         }
     }
 
+    /// Pop an item off of the stack
     pub fn pop(&mut self) -> Result<T, Error> {
         if self.head > 0 {
             match self.data.pop() {
