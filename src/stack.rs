@@ -22,10 +22,10 @@ impl<T> Stack<T> {
     ///
     /// # Arguments
     ///
-    /// *'size' The size of the stack to be created.
+    /// size The size of the stack to be created.
     pub fn new(size: usize) -> Stack<T> {
         Stack {
-            size: size,
+            size,
             head: 0,
             data: Vec::with_capacity(size),
         }
@@ -35,7 +35,7 @@ impl<T> Stack<T> {
     ///
     /// # Arguments
     ///
-    /// *'item' The item to be pushed onto the stack.
+    /// item The item to be pushed onto the stack.
     pub fn push(&mut self, item: T) -> Result<(), Error> {
         if self.head < self.size {
             self.head += 1;
