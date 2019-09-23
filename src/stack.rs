@@ -52,9 +52,9 @@ impl<T> Stack<T> {
             match self.data.pop() {
                 Some(s) => {
                     self.head -= 1;
-                    return Ok(s);
+                    Ok(s)
                 }
-                _ => return Err(Error::from(ErrorKind::Other)),
+                _ => Err(Error::from(ErrorKind::Other)),
             }
         } else {
             Err(Error::from(ErrorKind::Other))
