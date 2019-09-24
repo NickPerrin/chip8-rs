@@ -1,7 +1,8 @@
 use std::io::{Error, ErrorKind};
 use std::vec::Vec;
 
-/// A simple fixed-size stack implementation.
+/// A simple fixed-size stack implementation
+#[derive(PartialEq, Debug)]
 pub struct Stack<T> {
     pub size: usize,
     pub head: usize,
@@ -9,7 +10,7 @@ pub struct Stack<T> {
 }
 
 impl<T> Stack<T> {
-    /// Create an empty Stack object.
+    /// Create an empty Stack object
     pub fn default() -> Stack<T> {
         Stack {
             size: 0,
@@ -22,7 +23,7 @@ impl<T> Stack<T> {
     ///
     /// # Arguments
     ///
-    /// size The size of the stack to be created.
+    /// size The size of the stack to be created
     pub fn new(size: usize) -> Stack<T> {
         Stack {
             size,
