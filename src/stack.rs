@@ -9,16 +9,18 @@ pub struct Stack<T> {
     pub data: Vec<T>,
 }
 
-impl<T> Stack<T> {
-    /// Create an empty Stack object
-    pub fn default() -> Stack<T> {
+impl<T> Default for Stack<T> {
+    /// Create an empty stack with size 0
+    fn default() -> Stack<T> {
         Stack {
             size: 0,
             head: 0,
             data: Vec::new(),
         }
     }
+}
 
+impl<T> Stack<T> {
     /// Create a stack with a given size
     ///
     /// # Arguments
@@ -69,7 +71,7 @@ mod tests {
 
     #[test]
     fn empty_constructor() {
-        let empty: Stack<u8> = Stack::default();
+        let empty: Stack<u8> = Default::default();
         assert_eq!(0, empty.size);
         assert_eq!(0, empty.head);
         assert_eq!(0, empty.data.len());
@@ -87,14 +89,14 @@ mod tests {
 
     #[test]
     fn push_empty() {
-        let mut empty: Stack<u8> = Stack::default();
+        let mut empty: Stack<u8> = Default::default();
         let result = empty.push(1);
         assert!(result.is_err());
     }
 
     #[test]
     fn pop_empty() {
-        let mut empty: Stack<u8> = Stack::default();
+        let mut empty: Stack<u8> = Default::default();
         let result = empty.pop();
         assert!(result.is_err());
     }

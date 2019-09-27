@@ -16,6 +16,12 @@ pub struct Chip {
     screen_buffer: Vec<bool>, // @todo  refactor screen buffer into Vec<u8>
 }
 
+impl Default for Chip {
+    fn default() -> Chip {
+        Chip::new()
+    }
+}
+
 impl Chip {
     /// Create a new, default initialized Chip struct
     pub fn new() -> Chip {
@@ -51,7 +57,7 @@ impl Chip {
 
         let ms_byte = self.memory[usize::from(self.program_counter)];
         let ls_byte = self.memory[usize::from(self.program_counter + 1)];
-        let opcode: u16 = 0u16 | (u16::from(ms_byte) << 8);
+        let opcode: u16 = u16::from(ms_byte) << 8;
         self.program_counter += 2;
         Opcode::new(opcode | u16::from(ls_byte))
     }
