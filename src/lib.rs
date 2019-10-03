@@ -47,6 +47,7 @@ impl Chip {
         // execute instruction
 
         let opcode = self.get_next_opcode();
+        self.program_counter += 2;
         self.decode_execute(opcode);
     }
 
@@ -67,7 +68,75 @@ impl Chip {
     /// # Arguments
     ///
     /// opcode The opcode to be executed
-    fn decode_execute(&mut self, opcode: Opcode) {}
+    fn decode_execute(&mut self, opcode: Opcode) {
+        match opcode.n1() {
+            0x0 => {
+                match opcode.n4() {
+                    0x0 => (), // clear screen,
+                    0xE => (), // return
+                    _ => (),   // illegal opcode
+                }
+            }
+            0x1 => (), // jump to NNN
+            0x2 => (), // call subroutine at NNN
+            0x3 => (), // conditional skip
+            0x4 => (), // conditional skip
+            0x5 => (), // conditional skip
+            0x6 => (), // set register to constant
+            0x7 => (), // add constant to vx
+            0x8 => {
+                match opcode.n4() {
+                    0x0 => (), // set vx to vy
+                    0x1 => (), // vx = vx | vy
+                    0x2 => (), // vx = vx & vy
+                    0x3 => (), // vx = vx ^ vy,
+                    0x4 => (), // vx += vy,
+                    0x5 => (), // vx -= vy,
+                    0x6 => (), // vf = vx & 1 : vx>>1
+                    0x7 => (), // vx = vy - vx
+                    0xE => (), // vx<<1
+                    _ => (),   // illegal opcode
+                }
+            }
+            0x9 => (), // skip if vx != vy
+            0xA => (), // set addr register to NNN
+            0xB => (), // jump to address + v0,
+            0xC => (), // random bitwise and with constant
+            0xD => (), // draw sprite at coordinate
+            0xE => {
+                match opcode.n3() {
+                    0x9 => (), // skip next if key is present
+                    0xE => (), // skip next if key is not present
+                    _ => (),   // illegal opcode!
+                }
+            }
+            0xF => {
+                match opcode.n3() {
+                    0x0 => {
+                        match opcode.n4() {
+                            0x7 => (), // set vx to the delay timer
+                            0xA => (), // store keypress into vx
+                            _ => (),   //illegial opcode
+                        }
+                    }
+                    0x1 => {
+                        match opcode.n4() {
+                            0x5 => (), // set delay timer
+                            0x8 => (), // set sound timer
+                            0xE => (), // add vx to address register
+                            _ => (),   // illegal opcode
+                        }
+                    }
+                    0x2 => (), // set address register to sprite_addr[vx]
+                    0x3 => (), // write binary coded decimal to address register
+                    0x5 => (), // dump registers into memory
+                    0x6 => (), // load registers from memory
+                    _ => (),   // illegal opcode
+                }
+            }
+            _ => (), // illegal opcode
+        }
+    }
 }
 
 /// Represents a single 2 byte opcode and provides convenient access to each
