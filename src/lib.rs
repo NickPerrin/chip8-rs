@@ -29,7 +29,7 @@ impl Chip {
         Chip {
             memory: vec![0; 0xFFF],
             stack: stack::Stack::new(16),
-            registers: vec![0; 24],
+            registers: vec![0; 16],
             address: 0,
             program_counter: 0x200,
             screen_buffer: vec![false; SCREEN_WIDTH * SCREEN_HEIGHT],
@@ -44,7 +44,6 @@ impl Chip {
     /// Execute a single instruction
     pub fn tick(&mut self) {
         let opcode = self.get_next_opcode();
-        self.program_counter += 2;
         opcode.decode_execute(self);
     }
 
@@ -56,8 +55,16 @@ impl Chip {
         let ms_byte = self.memory[usize::from(self.program_counter)];
         let ls_byte = self.memory[usize::from(self.program_counter + 1)];
         let opcode: u16 = u16::from(ms_byte) << 8;
-        self.program_counter += 2;
         opcode::Opcode::new(opcode | u16::from(ls_byte))
+    }
+
+    /// Point the program counter to the next instruction.
+    /// Each instruction is 2 bytes
+    fn increment_program_counter(&mut self, step: Option<u16>) {
+        match step {
+            Some(i) => self.program_counter += 2 * i,
+            None => self.program_counter += 2,
+        }
     }
 }
 
