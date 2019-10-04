@@ -52,12 +52,20 @@ impl Opcode {
                 (self.opcode & 0x00FF) as u8,
             ),
             0x5 => self.skip_equal_registers(
-                &mut chip, 
-                usize::from(self.n3()), 
-                usize::from(self.n4())
+                &mut chip,
+                usize::from(self.n3()),
+                usize::from(self.n4()),
             ),
-            0x6 => (), // set register to constant
-            0x7 => (), // add constant to vx
+            0x6 => self.load_constant(
+                &mut chip,
+                usize::from(self.n3()),
+                (self.opcode & 0x00FF) as u8,
+            ),
+            0x7 => self.add_constant(
+                &mut chip,
+                usize::from(self.n3()),
+                (self.opcode & 0x00FF) as u8,
+            ),
             0x8 => {
                 match self.n4() {
                     0x0 => (), // set vx to vy
@@ -129,8 +137,6 @@ impl Opcode {
     }
 
     /// Jump to the given address
-    ///
-    /// address The address to be jumped to
     fn jump_unconditional(&self, chip: &mut Chip, address: u16) {
         if (address & 0xF000) != 0 {
             panic!("Invalid memory address provided to jump!");
@@ -139,8 +145,6 @@ impl Opcode {
     }
 
     /// Call a given subroutine
-    ///
-    /// address The address of the subroutine
     fn call_subroutine(&self, chip: &mut Chip, address: u16) {
         if (address & 0xF000) != 0 {
             panic!("Invalid memory address provided to call_subroutine!");
@@ -153,13 +157,10 @@ impl Opcode {
     }
 
     /// Skip the next instruction if the value matches the given register
-    ///
-    /// register The register to be compared. V0, V1,...
-    /// value The constant value to compare
-    fn skip_if_equal(&self, chip: &mut Chip, register: usize, value: u8) {
-        if register >= chip.registers.len() {
+    fn skip_if_equal(&self, chip: &mut Chip, vx: usize, value: u8) {
+        if vx >= chip.registers.len() {
             panic!("Invalid register provided");
-        } else if chip.registers[register] == value {
+        } else if chip.registers[vx] == value {
             chip.increment_program_counter(Some(2));
         } else {
             chip.increment_program_counter(None);
@@ -167,9 +168,6 @@ impl Opcode {
     }
 
     /// Skip the next instruction if the value does not match the given register
-    ///
-    /// register The register to be compared. V0, V1,...
-    /// value The constant value to compare
     fn skip_if_not_equal(&self, chip: &mut Chip, register: usize, value: u8) {
         if register >= chip.registers.len() {
             panic!("Invalid register provided");
@@ -190,11 +188,75 @@ impl Opcode {
             chip.increment_program_counter(None);
         }
     }
+
+    /// Set vx to a constant value
+    fn load_constant(&self, chip: &mut Chip, vx: usize, value: u8) {
+        if vx >= chip.registers.len() {
+            panic!("Invalid register provided");
+        }
+        chip.registers[vx] = value;
+        chip.increment_program_counter(None);
+    }
+
+    /// add a constant to vx
+    ///
+    /// note Carry flag is not changed
+    fn add_constant(&self, chip: &mut Chip, vx: usize, value: u8) {
+        if vx >= chip.registers.len() {
+            panic!("Invalid register provided");
+        }
+        chip.registers[vx] += chip.registers[vx].wrapping_add(value);
+        chip.increment_program_counter(None);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn add_constant() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        opcode.add_constant(&mut chip, 0, 2);
+        assert_eq!(2, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    fn add_constant_overflow() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 1;
+        opcode.add_constant(&mut chip, 0, 255);
+        assert_eq!(1, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    #[should_panic]
+    fn add_constant_invalid() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.add_constant(&mut chip, 0x10, 0);
+    }
+
+    #[test]
+    fn load_constant() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 1;
+        opcode.load_constant(&mut chip, 0, 0);
+        assert_eq!(0, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    #[should_panic]
+    fn load_constant_invalid() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.load_constant(&mut chip, 0x10, 0);
+    }
 
     #[test]
     fn skip_equal_registers_true() {
@@ -294,7 +356,7 @@ mod tests {
         let (mut chip, opcode) = chip_opcode();
         chip.stack.push(0x123).unwrap();
         opcode.return_from_subroutine(&mut chip);
-        assert_eq!(0x123 + 2, chip.program_counter);
+        assert_eq!(0x125, chip.program_counter);
     }
 
     #[test]
