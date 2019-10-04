@@ -11,19 +11,19 @@ impl Opcode {
         Opcode { opcode }
     }
 
-    pub fn n1(&self) -> u16 {
+    fn n1(&self) -> u16 {
         (self.opcode & 0xF000) >> 12
     }
 
-    pub fn n2(&self) -> u16 {
+    fn n2(&self) -> u16 {
         (self.opcode & 0x0f00) >> 8
     }
 
-    pub fn n3(&self) -> u16 {
+    fn n3(&self) -> u16 {
         (self.opcode & 0x00f0) >> 4
     }
 
-    pub fn n4(&self) -> u16 {
+    fn n4(&self) -> u16 {
         self.opcode & 0x000F
     }
 
@@ -32,15 +32,13 @@ impl Opcode {
     /// # Arguments
     ///
     /// opcode The opcode to be executed
-    pub fn decode_execute(&self, chip: &mut Chip) {
+    pub fn decode_execute(&self, mut chip: &mut Chip) {
         match self.n1() {
-            0x0 => {
-                match self.n4() {
-                    0x0 => (), // clear screen,
-                    0xE => (), // return
-                    _ => (),   // illegal opcode
-                }
-            }
+            0x0 => match self.n4() {
+                0x0 => Opcode::clear_screen(&mut chip),
+                0xE => (Opcode::return_from_subroutine(&mut chip)),
+                _ => (panic!("Illegal opcode! {}", self.opcode)),
+            },
             0x1 => (), // jump to NNN
             0x2 => (), // call subroutine at NNN
             0x3 => (), // conditional skip
@@ -101,6 +99,19 @@ impl Opcode {
             _ => (), // illegal opcode
         }
     }
+
+    fn clear_screen(chip: &mut Chip) {
+        chip.screen_buffer.clear();
+    }
+
+    fn return_from_subroutine(chip: &mut Chip) {
+        if let Ok(addr) = chip.stack.pop() {
+            chip.program_counter = addr;
+        } else {
+            eprintln!("Error popping value off the stack. Exiting...");
+            std::process::exit(1);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -129,5 +140,23 @@ mod tests {
         assert_eq!(o.n2(), 2);
         assert_eq!(o.n3(), 3);
         assert_eq!(o.n4(), 4);
+    }
+
+    #[test]
+    fn clear_screen_buffer() {
+        let mut chip = Chip::new();
+        chip.screen_buffer = vec![true; chip.screen_buffer.len()];
+        Opcode::clear_screen(&mut chip);
+
+        assert_eq!(chip.screen_buffer, vec![false; chip.screen_buffer.len()]);
+    }
+
+    #[test]
+    fn function_return() {
+        let mut chip = Chip::new();
+        chip.stack.push(0x123).unwrap();
+        Opcode::return_from_subroutine(&mut chip);
+
+        assert_eq!(0x123, chip.program_counter);
     }
 }
