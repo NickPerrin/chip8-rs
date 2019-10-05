@@ -1,4 +1,5 @@
 use super::Chip;
+use std::io::{Error, ErrorKind};
 
 /// Represents a single 2 byte opcode and provides convenient access to each
 /// nibble
@@ -66,20 +67,46 @@ impl Opcode {
                 usize::from(self.n3()),
                 (self.opcode & 0x00FF) as u8,
             ),
-            0x8 => {
-                match self.n4() {
-                    0x0 => (), // set vx to vy
-                    0x1 => (), // vx = vx | vy
-                    0x2 => (), // vx = vx & vy
-                    0x3 => (), // vx = vx ^ vy,
-                    0x4 => (), // vx += vy,
-                    0x5 => (), // vx -= vy,
-                    0x6 => (), // vf = vx & 1 : vx>>1
-                    0x7 => (), // vx = vy - vx
-                    0xE => (), // vx<<1
-                    _ => (panic!("Illegal opcode! {}", self.opcode)),
-                }
-            }
+            0x8 => match self.n4() {
+                0x0 => self.set_vx_from_vy(
+                    &mut chip,
+                    usize::from(self.n3()),
+                    usize::from(self.n2()),
+                ),
+                0x1 => self.vx_or_vy(
+                    &mut chip,
+                    usize::from(self.n3()),
+                    usize::from(self.n2()),
+                ),
+                0x2 => self.vx_and_vy(
+                    &mut chip,
+                    usize::from(self.n3()),
+                    usize::from(self.n2()),
+                ),
+                0x3 => self.vx_xor_vy(
+                    &mut chip,
+                    usize::from(self.n3()),
+                    usize::from(self.n2()),
+                ),
+                0x4 => self.add_vx_vy(
+                    &mut chip,
+                    usize::from(self.n3()),
+                    usize::from(self.n2()),
+                ),
+                0x5 => self.subtract_vx_vy(
+                    &mut chip,
+                    usize::from(self.n3()),
+                    usize::from(self.n2()),
+                ),
+                0x6 => self.shift_right_vx(&mut chip, usize::from(self.n3())),
+                0x7 => self.subtract_vy_vx(
+                    &mut chip,
+                    usize::from(self.n3()),
+                    usize::from(self.n2()),
+                ),
+                0xE => self.shift_left_vx(&mut chip, usize::from(self.n3())),
+                _ => (panic!("Illegal opcode! {}", self.opcode)),
+            },
             0x9 => (), // skip if vx != vy
             0xA => (), // set addr register to NNN
             0xB => (), // jump to address + v0,
@@ -118,6 +145,21 @@ impl Opcode {
             }
             _ => (panic!("Illegal opcode! {}", self.opcode)),
         }
+    }
+
+    fn valid_registers(registers: &[usize], chip: &Chip) -> Result<(), Error> {
+        if registers.len() == 0 {
+            return Err(Error::from(ErrorKind::Other));
+        }
+
+        let result: Result<(), Error> = Err(Error::from(ErrorKind::Other));
+        let max = chip.registers.len();
+        for index in registers {
+            if *index >= max {
+                return result;
+            }
+        }
+        Ok(())
     }
 
     /// Clear the screen buffer
@@ -202,17 +244,343 @@ impl Opcode {
     ///
     /// note Carry flag is not changed
     fn add_constant(&self, chip: &mut Chip, vx: usize, value: u8) {
-        if vx >= chip.registers.len() {
-            panic!("Invalid register provided");
-        }
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in add_constant");
         chip.registers[vx] += chip.registers[vx].wrapping_add(value);
         chip.increment_program_counter(None);
+    }
+
+    /// Set the value of vx to vy
+    fn set_vx_from_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
+        Opcode::valid_registers(&[vx, vy], &chip)
+            .expect("Invalid register in set_vx_from_vy");
+        chip.registers[vx] = chip.registers[vy];
+        chip.increment_program_counter(None);
+    }
+
+    /// Sets vx = vx | vy
+    fn vx_or_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
+        Opcode::valid_registers(&[vx, vy], &chip)
+            .expect("Invalid register in vx_or_vy");
+        chip.registers[vx] = chip.registers[vx] | chip.registers[vy];
+        chip.increment_program_counter(None);
+    }
+
+    /// Sets vx = vx & vy
+    fn vx_and_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
+        Opcode::valid_registers(&[vx, vy], &chip)
+            .expect("Invalid register in vx_and_vy");
+        chip.registers[vx] = chip.registers[vx] & chip.registers[vy];
+        chip.increment_program_counter(None);
+    }
+
+    /// Sets vx = vx ^ vy
+    fn vx_xor_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
+        Opcode::valid_registers(&[vx, vy], &chip)
+            .expect("Invalid register in vx_xor_vy");
+        chip.registers[vx] = chip.registers[vx] ^ chip.registers[vy];
+        chip.increment_program_counter(None);
+    }
+
+    /// vx = vx + vy
+    /// vf is set to 1 if overflow occurs
+    fn add_vx_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
+        Opcode::valid_registers(&[vx, vy], &chip)
+            .expect("Invalid register in add_vx_vy");
+
+        let (x, overflow) =
+            chip.registers[vx].overflowing_add(chip.registers[vy]);
+        chip.registers[vx] = x;
+        chip.registers[0xF] = u8::from(overflow);
+        chip.increment_program_counter(None);
+    }
+
+    /// Subtract vy from vx
+    fn subtract_vx_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
+        Opcode::valid_registers(&[vx, vy], &chip)
+            .expect("Invalid register in subtract_vx_vy");
+
+        let (x, overflow) =
+            chip.registers[vx].overflowing_sub(chip.registers[vy]);
+        chip.registers[vx] = x;
+        chip.registers[0xF] = u8::from(!overflow);
+        chip.increment_program_counter(None);
+    }
+
+    /// shift vx once to the right. Store lsb in vf
+    fn shift_right_vx(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in shift_right_vx");
+
+        chip.registers[0xF] = chip.registers[vx] & 0x1;
+        chip.registers[vx] = chip.registers[vx] >> 1;
+    }
+
+    /// Subtract vx from vy
+    fn subtract_vy_vx(&self, chip: &mut Chip, vx: usize, vy: usize) {
+        Opcode::valid_registers(&[vx, vy], &chip)
+            .expect("Invalid register in subtract_vx_vy");
+
+        let (x, overflow) =
+            chip.registers[vy].overflowing_sub(chip.registers[vx]);
+        chip.registers[vx] = x;
+        chip.registers[0xF] = u8::from(!overflow);
+        chip.increment_program_counter(None);
+    }
+
+    fn shift_left_vx(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in shift_right_vx");
+
+        chip.registers[0xF] = ((chip.registers[vx] & 0x80) >> 7) & 0x1;
+        chip.registers[vx] = chip.registers[vx] << 1;
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shift_left_vx_0() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0x7F;
+        opcode.shift_left_vx(&mut chip, 0);
+        assert_eq!(0xFE, chip.registers[0]);
+        assert_eq!(0, chip.registers[0xF]);
+    }
+
+    #[test]
+    fn shift_left_vx_1() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0xFF;
+        opcode.shift_left_vx(&mut chip, 0);
+        assert_eq!(0xFE, chip.registers[0]);
+        assert_eq!(1, chip.registers[0xF]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn shift_left_vx_invalid() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.shift_left_vx(&mut chip, 0x10);
+    }
+
+    #[test]
+    fn shift_right_vx_0() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0x2;
+        opcode.shift_right_vx(&mut chip, 0);
+        assert_eq!(1, chip.registers[0]);
+        assert_eq!(0, chip.registers[0xF]);
+    }
+
+    #[test]
+    fn shift_right_vx_1() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0x3;
+        opcode.shift_right_vx(&mut chip, 0);
+        assert_eq!(1, chip.registers[0]);
+        assert_eq!(1, chip.registers[0xF]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn shift_right_vx_invalid() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.shift_right_vx(&mut chip, 0x10);
+    }
+
+    #[test]
+    fn subtract_vx_greater_than_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 2;
+        chip.registers[1] = 1;
+        opcode.subtract_vx_vy(&mut chip, 0, 1);
+        assert_eq!(1, chip.registers[0]);
+        assert_eq!(1, chip.registers[0xF]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    fn subtract_vx_less_than_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 1;
+        opcode.subtract_vx_vy(&mut chip, 0, 1);
+        assert_eq!(255, chip.registers[0]);
+        assert_eq!(0, chip.registers[0xF]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    #[should_panic]
+    fn subtract_vx_vy_invalid_vx() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.subtract_vx_vy(&mut chip, 0x10, 0x0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn subtract_vx_vy_invalid_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.subtract_vx_vy(&mut chip, 0x0, 0x10);
+    }
+
+    #[test]
+    fn add_vx_vy_no_overflow() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 1;
+        opcode.add_vx_vy(&mut chip, 0, 1);
+        assert_eq!(1, chip.registers[0]);
+        assert_eq!(0, chip.registers[0xF]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+    #[test]
+    fn add_vx_vy_overflow() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 255;
+        chip.registers[1] = 1;
+        opcode.add_vx_vy(&mut chip, 0, 1);
+        assert_eq!(0, chip.registers[0]);
+        assert_eq!(1, chip.registers[0xF]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    #[should_panic]
+    fn add_vx_vy_invalid_vx() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.add_vx_vy(&mut chip, 0x10, 0x0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn add_vx_vy_invalid_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.add_vx_vy(&mut chip, 0x0, 0x10);
+    }
+
+    #[test]
+    fn vx_xor_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 1;
+        opcode.vx_xor_vy(&mut chip, 0, 1);
+        assert_eq!(1, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+
+        chip.registers[0] = 0;
+        chip.registers[1] = 0;
+        opcode.vx_xor_vy(&mut chip, 0, 1);
+        assert_eq!(0, chip.registers[0]);
+        assert_eq!(0x204, chip.program_counter);
+
+        chip.registers[0] = 1;
+        chip.registers[1] = 1;
+        opcode.vx_xor_vy(&mut chip, 0, 1);
+        assert_eq!(0, chip.registers[0]);
+        assert_eq!(0x206, chip.program_counter);
+    }
+
+    #[test]
+    #[should_panic]
+    fn vx_xor_vy_invalid_vx() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.vx_xor_vy(&mut chip, 0x10, 0x0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn vx_xor_vy_invalid_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.vx_xor_vy(&mut chip, 0x0, 0x10);
+    }
+
+    #[test]
+    fn vx_and_equals_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 1;
+        opcode.vx_and_vy(&mut chip, 0, 1);
+        assert_eq!(0, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    #[should_panic]
+    fn vx_and_equals_vy_invalid_vx() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.vx_and_vy(&mut chip, 0x10, 0x0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn vx_and_equals_vy_invalid_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.vx_and_vy(&mut chip, 0x0, 0x10);
+    }
+
+    #[test]
+    fn vx_or_equals_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 1;
+        opcode.vx_or_vy(&mut chip, 0, 1);
+        assert_eq!(1, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    #[should_panic]
+    fn vx_or_equals_vy_invalid_vx() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.vx_or_vy(&mut chip, 0x10, 0x0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn vx_or_equals_vy_invalid_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.vx_or_vy(&mut chip, 0x0, 0x10);
+    }
+
+    #[test]
+    fn set_vx_from_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 1;
+        opcode.set_vx_from_vy(&mut chip, 0, 1);
+        assert_eq!(1, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    #[should_panic]
+    fn set_vx_invalid_vx() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.set_vx_from_vy(&mut chip, 0x10, 0x0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn set_vx_invalid_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        opcode.set_vx_from_vy(&mut chip, 0x0, 0x10);
+    }
 
     #[test]
     fn add_constant() {
@@ -401,6 +769,47 @@ mod tests {
         chip.stack.size = 0;
         chip.stack.head = 0;
         opcode.call_subroutine(&mut chip, 0xFFF);
+    }
+
+    #[test]
+    fn valid_registers_trivial() {
+        let registers = vec![0x0];
+        let chip = Chip::new();
+        if let Ok(_) = Opcode::valid_registers(&registers, &chip) {
+            assert!(true);
+        } else {
+            assert!(false);
+        }
+
+        let registers = vec![0xF];
+        if let Ok(_) = Opcode::valid_registers(&registers, &chip) {
+            assert!(true);
+        } else {
+            assert!(false);
+        }
+
+        let mut registers: Vec<usize> = Vec::new();
+        if let Ok(_) = Opcode::valid_registers(&registers, &chip) {
+            assert!(false);
+        } else {
+            assert!(true);
+        }
+
+        for item in 0..0xF {
+            registers.push(item);
+        }
+        if let Ok(_) = Opcode::valid_registers(&registers, &chip) {
+            assert!(true);
+        } else {
+            assert!(false);
+        }
+
+        registers.push(0x10);
+        if let Ok(_) = Opcode::valid_registers(&registers, &chip) {
+            assert!(false);
+        } else {
+            assert!(true);
+        }
     }
 
     #[test]
