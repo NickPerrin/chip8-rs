@@ -5,3 +5,4 @@ authors = ["NickPerrin <perrin.64@osu.edu>"]
 edition = "2018"
 
 [dependencies]
+rand = "0.7.2"

@@ -28,6 +28,10 @@ impl Opcode {
         self.opcode & 0x000F
     }
 
+    fn constant(&self) -> u8 {
+        (self.opcode & 0xFF) as u8
+    }
+
     /// Decode and execute a single instruction
     ///
     /// # Arguments
@@ -45,12 +49,12 @@ impl Opcode {
             0x3 => self.skip_if_equal(
                 &mut chip,
                 usize::from(self.n3()),
-                (self.opcode & 0x00FF) as u8,
+                self.constant(),
             ),
             0x4 => self.skip_if_not_equal(
                 &mut chip,
                 usize::from(self.n3()),
-                (self.opcode & 0x00FF) as u8,
+                self.constant(),
             ),
             0x5 => self.skip_equal_registers(
                 &mut chip,
@@ -60,12 +64,12 @@ impl Opcode {
             0x6 => self.load_constant(
                 &mut chip,
                 usize::from(self.n3()),
-                (self.opcode & 0x00FF) as u8,
+                self.constant(),
             ),
             0x7 => self.add_constant(
                 &mut chip,
                 usize::from(self.n3()),
-                (self.opcode & 0x00FF) as u8,
+                self.constant(),
             ),
             0x8 => match self.n4() {
                 0x0 => self.set_vx_from_vy(
@@ -107,10 +111,18 @@ impl Opcode {
                 0xE => self.shift_left_vx(&mut chip, usize::from(self.n3())),
                 _ => (panic!("Illegal opcode! {}", self.opcode)),
             },
-            0x9 => (), // skip if vx != vy
-            0xA => (), // set addr register to NNN
-            0xB => (), // jump to address + v0,
-            0xC => (), // random bitwise and with constant
+            0x9 => self.skip_vx_not_equal_vy(
+                &mut chip,
+                usize::from(self.n3()),
+                usize::from(self.n2()),
+            ),
+            0xA => self.set_address_register(&mut chip, self.opcode),
+            0xB => self.jump_addr_v0(&mut chip, self.opcode),
+            0xC => self.set_vx_rand(
+                &mut chip,
+                usize::from(self.n3()),
+                self.constant(),
+            ),
             0xD => (), // draw sprite at coordinate
             0xE => {
                 match self.n3() {
@@ -328,6 +340,7 @@ impl Opcode {
         chip.increment_program_counter(None);
     }
 
+    /// Left shift vx, store ms_bit in vf
     fn shift_left_vx(&self, chip: &mut Chip, vx: usize) {
         Opcode::valid_registers(&[vx], &chip)
             .expect("Invalid register in shift_right_vx");
@@ -335,11 +348,89 @@ impl Opcode {
         chip.registers[0xF] = ((chip.registers[vx] & 0x80) >> 7) & 0x1;
         chip.registers[vx] = chip.registers[vx] << 1;
     }
+
+    fn skip_vx_not_equal_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in shift_right_vx");
+
+        if chip.registers[vx] != chip.registers[vy] {
+            chip.increment_program_counter(Some(2));
+        } else {
+            chip.increment_program_counter(None);
+        }
+    }
+
+    fn set_address_register(&self, chip: &mut Chip, addr: u16) {
+        chip.address = addr & 0x0FFF;
+        chip.increment_program_counter(None);
+    }
+
+    fn jump_addr_v0(&self, chip: &mut Chip, addr: u16) {
+        let mask_addr = addr & 0x0FFF;
+        chip.program_counter += mask_addr + u16::from(chip.registers[0]);
+    }
+
+    fn set_vx_rand(&self, chip: &mut Chip, vx: usize, constant: u8) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in shift_right_vx");
+        let random_byte = rand::random::<u8>();
+        chip.registers[vx] = random_byte & constant;
+        chip.increment_program_counter(None);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jump_v0() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0x34;
+        opcode.jump_addr_v0(&mut chip, 0x100);
+        assert_eq!(0x334, chip.program_counter);
+    }
+
+    #[test]
+    fn set_addr() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+
+        opcode.set_address_register(&mut chip, 0x1234);
+        assert_eq!(0x234, chip.address);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    fn set_addr_too_big() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+
+        opcode.set_address_register(&mut chip, 0x123);
+        assert_eq!(0x123, chip.address);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    fn skip_vx_ne_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 1;
+        opcode.skip_vx_not_equal_vy(&mut chip, 0, 1);
+        assert_eq!(0x204, chip.program_counter);
+    }
+
+    #[test]
+    fn skip_vx_eq_vy() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 4;
+        chip.registers[1] = 4;
+        opcode.skip_vx_not_equal_vy(&mut chip, 0, 1);
+        assert_eq!(0x202, chip.program_counter);
+    }
 
     #[test]
     fn shift_left_vx_0() {
