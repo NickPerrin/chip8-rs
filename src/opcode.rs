@@ -123,7 +123,12 @@ impl Opcode {
                 usize::from(self.n3()),
                 self.constant(),
             ),
-            0xD => (), // draw sprite at coordinate
+            0xD => self.draw_sprite(
+                &mut chip,
+                usize::from(self.n3()),
+                usize::from(self.n3()),
+                (self.n1() & 0xFF) as u8,
+            ),
             0xE => {
                 match self.n3() {
                     0x9 => (), // skip next if key is present
@@ -349,8 +354,9 @@ impl Opcode {
         chip.registers[vx] = chip.registers[vx] << 1;
     }
 
+    /// Skip next instruction if vx != vy
     fn skip_vx_not_equal_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
-        Opcode::valid_registers(&[vx], &chip)
+        Opcode::valid_registers(&[vx, vy], &chip)
             .expect("Invalid register in shift_right_vx");
 
         if chip.registers[vx] != chip.registers[vy] {
@@ -360,16 +366,19 @@ impl Opcode {
         }
     }
 
+    /// Set the address register I
     fn set_address_register(&self, chip: &mut Chip, addr: u16) {
         chip.address = addr & 0x0FFF;
         chip.increment_program_counter(None);
     }
 
+    /// Jump to address + v0
     fn jump_addr_v0(&self, chip: &mut Chip, addr: u16) {
         let mask_addr = addr & 0x0FFF;
         chip.program_counter += mask_addr + u16::from(chip.registers[0]);
     }
 
+    /// Set vx to a random value (0..255)
     fn set_vx_rand(&self, chip: &mut Chip, vx: usize, constant: u8) {
         Opcode::valid_registers(&[vx], &chip)
             .expect("Invalid register in shift_right_vx");
@@ -377,11 +386,132 @@ impl Opcode {
         chip.registers[vx] = random_byte & constant;
         chip.increment_program_counter(None);
     }
+
+    /// Determine if a pixel has switched from 1 to 0
+    fn pixel_collision(b1: u8, b2: u8) -> bool {
+        for shift in 0..0x8 {
+            let mask = 1 << shift;
+
+            if b1 & mask == 0 {
+                continue;
+            } else {
+                if b2 & mask != 0 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Draw a sprite to the screen
+    fn draw_sprite(&self, chip: &mut Chip, vx: usize, vy: usize, height: u8) {
+        Opcode::valid_registers(&[vx, vy], &chip)
+            .expect("Invalid register in shift_right_vx");
+
+        chip.registers[0xF] = 0;
+
+        for row in 0..height {
+            let chunk_index: u8 = ((chip.registers[vy] + row)
+                * chip.screen_width)
+                + chip.registers[vx];
+            let chunk: u8 = chip.screen_buffer[usize::from(chunk_index)];
+
+            // @todo remove
+            println!("row: {}", row);
+            println!("chunk: {}", chunk);
+
+            let new = chip.memory[usize::from(chip.address) + usize::from(row)];
+
+            // @todo remove
+            println!("new: {}", new);
+
+            chip.screen_buffer[usize::from(chunk_index)] = chunk ^ new;
+            if Opcode::pixel_collision(chunk, new) {
+                chip.registers[0xF] = 1;
+                break;
+            }
+        }
+        chip.increment_program_counter(None);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draw_sprite_trivial() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 0;
+
+        chip.address = 0;
+        chip.memory[usize::from(chip.address)] = 0xFF;
+        chip.screen_buffer[usize::from(chip.address)] = 0;
+
+        opcode.draw_sprite(&mut chip, 0, 1, 1);
+        assert_eq!(0, chip.registers[0xF]);
+        assert_eq!(0x202, chip.program_counter);
+        assert_eq!(0xFF, chip.screen_buffer[usize::from(chip.address)]);
+    }
+
+    #[test]
+    fn draw_sprite_flip_bit() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 0;
+
+        chip.address = 0;
+        chip.memory[usize::from(chip.address)] = 0xA5;
+        chip.screen_buffer[usize::from(chip.address)] = 0xA5;
+
+        opcode.draw_sprite(&mut chip, 0, 1, 1);
+        assert_eq!(1, chip.registers[0xF]);
+        assert_eq!(0x202, chip.program_counter);
+        assert_eq!(0, chip.screen_buffer[usize::from(chip.address)]);
+    }
+
+    #[test]
+    fn draw_sprite_multi_line() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.registers[1] = 0;
+
+        chip.address = 0;
+        chip.memory[usize::from(chip.address)] = 0x00;
+        chip.memory[usize::from(chip.address) + 1] = 0x01;
+        chip.screen_buffer[usize::from(chip.address)] = 0xA5;
+        chip.screen_buffer
+            [usize::from(chip.address) + usize::from(chip.screen_width)] = 0x01;
+
+        opcode.draw_sprite(&mut chip, 0, 1, 2);
+        assert_eq!(1, chip.registers[0xF]);
+        assert_eq!(0x202, chip.program_counter);
+        assert_eq!(0xA5, chip.screen_buffer[usize::from(chip.address)]);
+        assert_eq!(0x00, chip.screen_buffer[usize::from(chip.address) + 1]);
+    }
+
+    #[test]
+    fn pixel_collision() {
+        let mut b1 = 0;
+        let mut b2 = 0;
+        assert!(!Opcode::pixel_collision(b1, b2));
+
+        b1 = 1;
+        b2 = 1;
+        assert!(Opcode::pixel_collision(b1, b2));
+
+        b1 = 0x10;
+        b2 = 0x1F;
+        assert!(Opcode::pixel_collision(b1, b2));
+
+        b1 = 0x80;
+        b2 = 0x80;
+        assert!(Opcode::pixel_collision(b1, b2));
+    }
 
     #[test]
     fn jump_v0() {
@@ -804,9 +934,9 @@ mod tests {
     #[test]
     fn clear_screen_buffer() {
         let (mut chip, opcode) = chip_opcode();
-        chip.screen_buffer = vec![true; chip.screen_buffer.len()];
+        chip.screen_buffer = vec![1; chip.screen_buffer.len()];
         opcode.clear_screen(&mut chip);
-        assert_eq!(chip.screen_buffer, vec![false; chip.screen_buffer.len()]);
+        assert_eq!(chip.screen_buffer, vec![0; chip.screen_buffer.len()]);
         assert_eq!(0x202, chip.program_counter);
     }
 

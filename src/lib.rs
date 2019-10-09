@@ -2,8 +2,8 @@ use std::vec::Vec;
 pub mod opcode;
 pub mod stack;
 
-const SCREEN_WIDTH: usize = 64;
-const SCREEN_HEIGHT: usize = 32;
+const SCREEN_WIDTH: u8 = 64;
+const SCREEN_HEIGHT: u8 = 32;
 
 /// This represents the state of the chip-8 system including memory,
 /// call stack, general purpose registers, program counter and screen buffer
@@ -14,7 +14,9 @@ pub struct Chip {
     registers: Vec<u8>,
     address: u16,
     program_counter: u16,
-    screen_buffer: Vec<bool>, // @todo  refactor screen buffer into Vec<u8>
+    screen_buffer: Vec<u8>,
+    screen_width: u8,
+    screen_height: u8,
 }
 
 impl Default for Chip {
@@ -32,7 +34,13 @@ impl Chip {
             registers: vec![0; 16],
             address: 0,
             program_counter: 0x200,
-            screen_buffer: vec![false; SCREEN_WIDTH * SCREEN_HEIGHT],
+            screen_buffer: vec![
+                0;
+                usize::from(SCREEN_WIDTH)
+                    * usize::from(SCREEN_HEIGHT)
+            ],
+            screen_width: SCREEN_WIDTH,
+            screen_height: SCREEN_HEIGHT,
         }
     }
 
@@ -80,7 +88,7 @@ mod tests {
         c.registers[0xf] = 2;
         c.address = 100;
         c.program_counter = 1;
-        c.screen_buffer[0] = true;
+        c.screen_buffer[0] = 0;
 
         assert_ne!(c, Chip::new());
 
