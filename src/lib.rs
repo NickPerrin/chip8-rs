@@ -18,6 +18,8 @@ pub struct Chip {
     screen_buffer: Vec<u8>,
     screen_width: u8,
     screen_height: u8,
+    sound_timer: u8,
+    delay_timer: u8,
 }
 
 impl Default for Chip {
@@ -43,6 +45,8 @@ impl Chip {
             ],
             screen_width: SCREEN_WIDTH,
             screen_height: SCREEN_HEIGHT,
+            delay_timer: 0,
+            sound_timer: 0,
         }
     }
 
@@ -53,6 +57,9 @@ impl Chip {
 
     /// Execute a single instruction
     pub fn tick(&mut self) {
+        self.delay_timer -= 1;
+        self.sound_timer -= 1;
+
         let opcode = self.get_next_opcode();
         opcode.decode_execute(self);
     }
@@ -75,6 +82,16 @@ impl Chip {
             Some(i) => self.program_counter += 2 * i,
             None => self.program_counter += 2,
         }
+    }
+
+    /// Get the first pressed key from the keyboard
+    fn get_pressed_key(&self) -> Option<usize> {
+        for key in 0..self.keys.len() {
+            if self.keys[key] {
+                return Some(key);
+            }
+        }
+        None
     }
 }
 

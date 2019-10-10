@@ -138,13 +138,14 @@ impl Opcode {
             },
             0xF => {
                 match self.n3() {
-                    0x0 => {
-                        match self.n4() {
-                            0x7 => (), // set vx to the delay timer
-                            0xA => (), // store key press into vx
-                            _ => (panic!("Illegal opcode! {}", self.opcode)),
+                    0x0 => match self.n4() {
+                        0x7 => self
+                            .get_delay_timer(&mut chip, usize::from(self.n3())),
+                        0xA => {
+                            self.wait_for_key(&mut chip, usize::from(self.n3()))
                         }
-                    }
+                        _ => (panic!("Illegal opcode! {}", self.opcode)),
+                    },
                     0x1 => {
                         match self.n4() {
                             0x5 => (), // set delay timer
@@ -336,7 +337,7 @@ impl Opcode {
     /// Subtract vx from vy
     fn subtract_vy_vx(&self, chip: &mut Chip, vx: usize, vy: usize) {
         Opcode::valid_registers(&[vx, vy], &chip)
-            .expect("Invalid register in subtract_vx_vy");
+            .expect("Invalid register in subtract_vy_vx");
 
         let (x, overflow) =
             chip.registers[vy].overflowing_sub(chip.registers[vx]);
@@ -348,7 +349,7 @@ impl Opcode {
     /// Left shift vx, store ms_bit in vf
     fn shift_left_vx(&self, chip: &mut Chip, vx: usize) {
         Opcode::valid_registers(&[vx], &chip)
-            .expect("Invalid register in shift_right_vx");
+            .expect("Invalid register in shift_left_vx");
 
         chip.registers[0xF] = ((chip.registers[vx] & 0x80) >> 7) & 0x1;
         chip.registers[vx] <<= 1;
@@ -357,7 +358,7 @@ impl Opcode {
     /// Skip next instruction if vx != vy
     fn skip_vx_not_equal_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
         Opcode::valid_registers(&[vx, vy], &chip)
-            .expect("Invalid register in shift_right_vx");
+            .expect("Invalid register in skip_vx_not_equal_vy");
 
         if chip.registers[vx] != chip.registers[vy] {
             chip.increment_program_counter(Some(2));
@@ -404,7 +405,7 @@ impl Opcode {
     /// Draw a sprite to the screen
     fn draw_sprite(&self, chip: &mut Chip, vx: usize, vy: usize, height: u8) {
         Opcode::valid_registers(&[vx, vy], &chip)
-            .expect("Invalid register in shift_right_vx");
+            .expect("Invalid register in draw_sprite");
 
         chip.registers[0xF] = 0;
 
@@ -426,7 +427,7 @@ impl Opcode {
 
     fn skip_on_keypress(&self, chip: &mut Chip, vx: usize) {
         Opcode::valid_registers(&[vx], &chip)
-            .expect("Invalid register in shift_right_vx");
+            .expect("Invalid register in skip_on_keypress");
 
         if chip.keys[usize::from(chip.registers[vx])] {
             chip.increment_program_counter(Some(2));
@@ -437,7 +438,7 @@ impl Opcode {
 
     fn skip_not_keypress(&self, chip: &mut Chip, vx: usize) {
         Opcode::valid_registers(&[vx], &chip)
-            .expect("Invalid register in shift_right_vx");
+            .expect("Invalid register in skip_not_keypress");
 
         if chip.keys[usize::from(chip.registers[vx])] {
             chip.increment_program_counter(None);
@@ -445,11 +446,64 @@ impl Opcode {
             chip.increment_program_counter(Some(2));
         }
     }
+
+    fn get_delay_timer(&self, chip: &mut Chip, vx: usize) {
+        chip.registers[vx] = chip.delay_timer;
+        chip.increment_program_counter(None);
+    }
+
+    fn wait_for_key(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in wait_for_key");
+        if let Some(key) = chip.get_pressed_key() {
+            chip.registers[vx] = key as u8;
+            chip.increment_program_counter(None);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn get_key() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.keys[1] = true;
+        opcode.wait_for_key(&mut chip, 0);
+        assert_eq!(1, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    fn wait_for_key() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        for _i in 0..50 {
+            opcode.wait_for_key(&mut chip, 0);
+            assert_eq!(0x200, chip.program_counter);
+        }
+
+        chip.keys[2] = true;
+        opcode.wait_for_key(&mut chip, 0);
+        assert_eq!(2, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    fn get_delay_timer() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.delay_timer = 255;
+        opcode.get_delay_timer(&mut chip, 0);
+
+        assert_eq!(255, chip.registers[0]);
+        assert_eq!(0x202, chip.program_counter);
+    }
 
     #[test]
     fn skip_not_keypress() {
