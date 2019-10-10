@@ -14,6 +14,7 @@ pub struct Chip {
     registers: Vec<u8>,
     address: u16,
     program_counter: u16,
+    keys: Vec<bool>,
     screen_buffer: Vec<u8>,
     screen_width: u8,
     screen_height: u8,
@@ -34,6 +35,7 @@ impl Chip {
             registers: vec![0; 16],
             address: 0,
             program_counter: 0x200,
+            keys: vec![false; 16],
             screen_buffer: vec![
                 0;
                 usize::from(SCREEN_WIDTH)

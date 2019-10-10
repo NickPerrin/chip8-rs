@@ -129,13 +129,13 @@ impl Opcode {
                 usize::from(self.n3()),
                 (self.n1() & 0xFF) as u8,
             ),
-            0xE => {
-                match self.n3() {
-                    0x9 => (), // skip next if key is present
-                    0xE => (), // skip next if key is not present
-                    _ => (panic!("Illegal opcode! {}", self.opcode)),
+            0xE => match self.n3() {
+                0x9 => self.skip_on_keypress(&mut chip, usize::from(self.n3())),
+                0xE => {
+                    self.skip_not_keypress(&mut chip, usize::from(self.n3()))
                 }
-            }
+                _ => (panic!("Illegal opcode! {}", self.opcode)),
+            },
             0xF => {
                 match self.n3() {
                     0x0 => {
@@ -415,15 +415,7 @@ impl Opcode {
                 * chip.screen_width)
                 + chip.registers[vx];
             let chunk: u8 = chip.screen_buffer[usize::from(chunk_index)];
-
-            // @todo remove
-            println!("row: {}", row);
-            println!("chunk: {}", chunk);
-
             let new = chip.memory[usize::from(chip.address) + usize::from(row)];
-
-            // @todo remove
-            println!("new: {}", new);
 
             chip.screen_buffer[usize::from(chunk_index)] = chunk ^ new;
             if Opcode::pixel_collision(chunk, new) {
@@ -433,11 +425,61 @@ impl Opcode {
         }
         chip.increment_program_counter(None);
     }
+
+    fn skip_on_keypress(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in shift_right_vx");
+
+        if chip.keys[usize::from(chip.registers[vx])] {
+            chip.increment_program_counter(Some(2));
+        } else {
+            chip.increment_program_counter(None);
+        }
+    }
+
+    fn skip_not_keypress(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in shift_right_vx");
+
+        if chip.keys[usize::from(chip.registers[vx])] {
+            chip.increment_program_counter(None);
+        } else {
+            chip.increment_program_counter(Some(2));
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn skip_not_keypress() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.keys[0] = false;
+        opcode.skip_not_keypress(&mut chip, 0);
+        assert_eq!(0x204, chip.program_counter);
+
+        chip.keys[0] = true;
+        opcode.skip_not_keypress(&mut chip, 0);
+        assert_eq!(0x206, chip.program_counter);
+    }
+
+    #[test]
+    fn skip_on_keypress() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0;
+        chip.keys[0] = false;
+        opcode.skip_on_keypress(&mut chip, 0);
+        assert_eq!(0x202, chip.program_counter);
+
+        chip.keys[0] = true;
+        opcode.skip_on_keypress(&mut chip, 0);
+        assert_eq!(0x206, chip.program_counter);
+    }
 
     #[test]
     fn draw_sprite_trivial() {
