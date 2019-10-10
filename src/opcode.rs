@@ -165,7 +165,7 @@ impl Opcode {
     }
 
     fn valid_registers(registers: &[usize], chip: &Chip) -> Result<(), Error> {
-        if registers.len() == 0 {
+        if registers.is_empty() {
             return Err(Error::from(ErrorKind::Other));
         }
 
@@ -208,7 +208,7 @@ impl Opcode {
         if (address & 0xF000) != 0 {
             panic!("Invalid memory address provided to call_subroutine!");
         }
-        if let Ok(_) = chip.stack.push(chip.program_counter) {
+        if chip.stack.push(chip.program_counter).is_ok() {
             chip.program_counter = address;
         } else {
             panic!("The call stack has run out of space!");
@@ -279,7 +279,7 @@ impl Opcode {
     fn vx_or_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
         Opcode::valid_registers(&[vx, vy], &chip)
             .expect("Invalid register in vx_or_vy");
-        chip.registers[vx] = chip.registers[vx] | chip.registers[vy];
+        chip.registers[vx] |= chip.registers[vy];
         chip.increment_program_counter(None);
     }
 
@@ -287,7 +287,7 @@ impl Opcode {
     fn vx_and_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
         Opcode::valid_registers(&[vx, vy], &chip)
             .expect("Invalid register in vx_and_vy");
-        chip.registers[vx] = chip.registers[vx] & chip.registers[vy];
+        chip.registers[vx] &= chip.registers[vy];
         chip.increment_program_counter(None);
     }
 
@@ -295,7 +295,7 @@ impl Opcode {
     fn vx_xor_vy(&self, chip: &mut Chip, vx: usize, vy: usize) {
         Opcode::valid_registers(&[vx, vy], &chip)
             .expect("Invalid register in vx_xor_vy");
-        chip.registers[vx] = chip.registers[vx] ^ chip.registers[vy];
+        chip.registers[vx] ^= chip.registers[vy];
         chip.increment_program_counter(None);
     }
 
@@ -330,7 +330,7 @@ impl Opcode {
             .expect("Invalid register in shift_right_vx");
 
         chip.registers[0xF] = chip.registers[vx] & 0x1;
-        chip.registers[vx] = chip.registers[vx] >> 1;
+        chip.registers[vx] >>= 1;
     }
 
     /// Subtract vx from vy
@@ -351,7 +351,7 @@ impl Opcode {
             .expect("Invalid register in shift_right_vx");
 
         chip.registers[0xF] = ((chip.registers[vx] & 0x80) >> 7) & 0x1;
-        chip.registers[vx] = chip.registers[vx] << 1;
+        chip.registers[vx] <<= 1;
     }
 
     /// Skip next instruction if vx != vy
@@ -394,10 +394,8 @@ impl Opcode {
 
             if b1 & mask == 0 {
                 continue;
-            } else {
-                if b2 & mask != 0 {
-                    return true;
-                }
+            } else if b2 & mask != 0 {
+                return true;
             }
         }
         false
