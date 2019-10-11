@@ -83,8 +83,8 @@ impl Chip {
 
     /// Execute a single instruction
     pub fn tick(&mut self) {
-        self.delay_timer -= 1;
-        self.sound_timer -= 1;
+        self.delay_timer = self.delay_timer.checked_sub(1).unwrap_or(0);
+        self.sound_timer = self.sound_timer.checked_sub(1).unwrap_or(0);
 
         let opcode = self.get_next_opcode();
         opcode.decode_execute(self);
