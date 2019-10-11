@@ -48,119 +48,124 @@ impl Opcode {
             0x2 => self.call_subroutine(&mut chip, self.opcode & 0x0FFF),
             0x3 => self.skip_if_equal(
                 &mut chip,
-                usize::from(self.n3()),
+                usize::from(self.n2()),
                 self.constant(),
             ),
             0x4 => self.skip_if_not_equal(
                 &mut chip,
-                usize::from(self.n3()),
+                usize::from(self.n2()),
                 self.constant(),
             ),
             0x5 => self.skip_equal_registers(
                 &mut chip,
+                usize::from(self.n2()),
                 usize::from(self.n3()),
-                usize::from(self.n4()),
             ),
             0x6 => self.load_constant(
                 &mut chip,
-                usize::from(self.n3()),
+                usize::from(self.n2()),
                 self.constant(),
             ),
             0x7 => self.add_constant(
                 &mut chip,
-                usize::from(self.n3()),
+                usize::from(self.n2()),
                 self.constant(),
             ),
             0x8 => match self.n4() {
                 0x0 => self.set_vx_from_vy(
                     &mut chip,
-                    usize::from(self.n3()),
                     usize::from(self.n2()),
+                    usize::from(self.n3()),
                 ),
                 0x1 => self.vx_or_vy(
                     &mut chip,
-                    usize::from(self.n3()),
                     usize::from(self.n2()),
+                    usize::from(self.n3()),
                 ),
                 0x2 => self.vx_and_vy(
                     &mut chip,
-                    usize::from(self.n3()),
                     usize::from(self.n2()),
+                    usize::from(self.n3()),
                 ),
                 0x3 => self.vx_xor_vy(
                     &mut chip,
-                    usize::from(self.n3()),
                     usize::from(self.n2()),
+                    usize::from(self.n3()),
                 ),
                 0x4 => self.add_vx_vy(
                     &mut chip,
-                    usize::from(self.n3()),
                     usize::from(self.n2()),
+                    usize::from(self.n3()),
                 ),
                 0x5 => self.subtract_vx_vy(
                     &mut chip,
-                    usize::from(self.n3()),
                     usize::from(self.n2()),
+                    usize::from(self.n3()),
                 ),
-                0x6 => self.shift_right_vx(&mut chip, usize::from(self.n3())),
+                0x6 => self.shift_right_vx(&mut chip, usize::from(self.n2())),
                 0x7 => self.subtract_vy_vx(
                     &mut chip,
-                    usize::from(self.n3()),
                     usize::from(self.n2()),
+                    usize::from(self.n3()),
                 ),
                 0xE => self.shift_left_vx(&mut chip, usize::from(self.n3())),
                 _ => (panic!("Illegal opcode! {}", self.opcode)),
             },
             0x9 => self.skip_vx_not_equal_vy(
                 &mut chip,
-                usize::from(self.n3()),
                 usize::from(self.n2()),
+                usize::from(self.n3()),
             ),
             0xA => self.set_address_register(&mut chip, self.opcode),
             0xB => self.jump_addr_v0(&mut chip, self.opcode),
             0xC => self.set_vx_rand(
                 &mut chip,
-                usize::from(self.n3()),
+                usize::from(self.n2()),
                 self.constant(),
             ),
             0xD => self.draw_sprite(
                 &mut chip,
-                usize::from(self.n3()),
+                usize::from(self.n2()),
                 usize::from(self.n3()),
                 (self.n1() & 0xFF) as u8,
             ),
             0xE => match self.n3() {
-                0x9 => self.skip_on_keypress(&mut chip, usize::from(self.n3())),
-                0xE => {
-                    self.skip_not_keypress(&mut chip, usize::from(self.n3()))
+                0x9 => self.skip_on_keypress(&mut chip, usize::from(self.n2())),
+                0xA => {
+                    self.skip_not_keypress(&mut chip, usize::from(self.n2()))
                 }
                 _ => (panic!("Illegal opcode! {}", self.opcode)),
             },
-            0xF => {
-                match self.n3() {
-                    0x0 => match self.n4() {
-                        0x7 => self
-                            .get_delay_timer(&mut chip, usize::from(self.n3())),
-                        0xA => {
-                            self.wait_for_key(&mut chip, usize::from(self.n3()))
-                        }
-                        _ => (panic!("Illegal opcode! {}", self.opcode)),
-                    },
-                    0x1 => {
-                        match self.n4() {
-                            0x5 => (), // set delay timer
-                            0x8 => (), // set sound timer
-                            0xE => (), // add vx to address register
-                            _ => (panic!("Illegal opcode! {}", self.opcode)),
-                        }
+            0xF => match self.n3() {
+                0x0 => match self.n4() {
+                    0x7 => {
+                        self.get_delay_timer(&mut chip, usize::from(self.n2()))
                     }
-                    0x2 => (), // set address register to sprite_addr[vx]
-                    0x3 => (), // write binary coded decimal to address register
-                    0x5 => (), // dump registers into memory
-                    0x6 => (), // load registers from memory
+                    0xA => self.wait_for_key(&mut chip, usize::from(self.n2())),
                     _ => (panic!("Illegal opcode! {}", self.opcode)),
+                },
+                0x1 => {
+                    match self.n4() {
+                        0x5 => self
+                            .set_delay_timer(&mut chip, usize::from(self.n2())),
+                        0x8 => self
+                            .set_sound_timer(&mut chip, usize::from(self.n2())),
+                        0xE => self.add_vx_to_address_register(
+                            &mut chip,
+                            usize::from(self.n2()),
+                        ),
+                        _ => (panic!("Illegal opcode! {}", self.opcode)),
+                    }
                 }
-            }
+                0x2 => self.get_font_sprite(&mut chip, usize::from(self.n2())),
+                0x3 => self.get_binary_coded_decimal(
+                    &mut chip,
+                    usize::from(self.n2()),
+                ),
+                0x5 => self.register_dump(&mut chip, usize::from(self.n2())),
+                0x6 => self.register_load(&mut chip, usize::from(self.n2())),
+                _ => (panic!("Illegal opcode! {}", self.opcode)),
+            },
             _ => (panic!("Illegal opcode! {}", self.opcode)),
         }
     }
@@ -425,6 +430,7 @@ impl Opcode {
         chip.increment_program_counter(None);
     }
 
+    /// Skip the next instruction if a given key is pressed
     fn skip_on_keypress(&self, chip: &mut Chip, vx: usize) {
         Opcode::valid_registers(&[vx], &chip)
             .expect("Invalid register in skip_on_keypress");
@@ -436,6 +442,7 @@ impl Opcode {
         }
     }
 
+    /// Skip the next instruction if a given key is not pressed
     fn skip_not_keypress(&self, chip: &mut Chip, vx: usize) {
         Opcode::valid_registers(&[vx], &chip)
             .expect("Invalid register in skip_not_keypress");
@@ -447,24 +454,244 @@ impl Opcode {
         }
     }
 
+    /// Get the value of the delay timer
     fn get_delay_timer(&self, chip: &mut Chip, vx: usize) {
         chip.registers[vx] = chip.delay_timer;
         chip.increment_program_counter(None);
     }
 
+    /// Block execution until any key is pressed
     fn wait_for_key(&self, chip: &mut Chip, vx: usize) {
         Opcode::valid_registers(&[vx], &chip)
             .expect("Invalid register in wait_for_key");
+
         if let Some(key) = chip.get_pressed_key() {
             chip.registers[vx] = key as u8;
             chip.increment_program_counter(None);
         }
+    }
+
+    /// Set the delay timer
+    fn set_delay_timer(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in set_delay_timer");
+        chip.delay_timer = chip.registers[vx];
+        chip.increment_program_counter(None);
+    }
+
+    /// Set the sound timer
+    fn set_sound_timer(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in set_sound_timer");
+        chip.sound_timer = chip.registers[vx];
+        chip.increment_program_counter(None);
+    }
+
+    /// Add vx to the address register I. If overflow occurs, vf is set to 1.
+    /// vf is set to 0 otherwise.
+    fn add_vx_to_address_register(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in add_vx_to_address_register");
+
+        let (result, overflow) =
+            chip.address.overflowing_add(u16::from(chip.registers[vx]));
+        chip.address = result;
+        if overflow {
+            chip.registers[0xF] = 1;
+        } else {
+            chip.registers[0xF] = 0;
+        }
+        chip.increment_program_counter(None);
+    }
+
+    /// Set address to the sprite in vx
+    fn get_font_sprite(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in get_font_sprite");
+
+        chip.address = u16::from(chip.registers[vx] * 5);
+        chip.increment_program_counter(None);
+    }
+
+    /// Convert vx to a binary coded decimal value
+    fn get_binary_coded_decimal(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in get_binary_coded_decimal");
+
+        let mut result: u8 = 0;
+        let mut binary_value = chip.registers[vx];
+        for exponent in 0..8 {
+            let bit = (binary_value & 0x1) == 1;
+            if bit {
+                result += 2u8.pow(exponent);
+            }
+            binary_value >>= 1;
+        }
+
+        chip.address += 2;
+        chip.memory[usize::from(chip.address)] = result % 10;
+        result /= 10;
+        chip.address -= 1;
+        chip.memory[usize::from(chip.address)] = result % 10;
+        result /= 10;
+        chip.address -= 1;
+        chip.memory[usize::from(chip.address)] = result % 10;
+        chip.increment_program_counter(None);
+    }
+
+    /// Store v0 - vx inclusive into the address register. The address register
+    /// is unchanged.
+    fn register_dump(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in register_dump");
+
+        for i in 0..=vx as usize {
+            chip.memory[usize::from(chip.address) + i] = chip.registers[i];
+        }
+        chip.increment_program_counter(None);
+    }
+
+    /// Load v0 - vx inclusive from memory
+    fn register_load(&self, chip: &mut Chip, vx: usize) {
+        Opcode::valid_registers(&[vx], &chip)
+            .expect("Invalid register in register_load");
+
+        for i in 0..=vx {
+            chip.registers[i] = chip.memory[usize::from(chip.address) + i];
+        }
+        chip.increment_program_counter(None);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn load_register_0() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.address = 0x300;
+        chip.memory[usize::from(chip.address)] = 0x44;
+        let vx = 0;
+        opcode.register_load(&mut chip, vx);
+        assert_eq!(0x202, chip.program_counter);
+        assert_eq!(chip.registers[vx], 0x44);
+    }
+
+    #[test]
+    fn register_dump_0() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.address = 0x300;
+        chip.registers[0] = 33;
+        opcode.register_dump(&mut chip, 0);
+        assert_eq!(0x202, chip.program_counter);
+        assert_eq!(33, chip.memory[usize::from(chip.address)]);
+    }
+
+    #[test]
+    fn register_dump_many() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.address = 0x300;
+        for i in 0..0x10_u8 {
+            chip.registers[usize::from(i)] = i;
+        }
+        opcode.register_dump(&mut chip, 0xF);
+        assert_eq!(0x202, chip.program_counter);
+        for i in 0..0x10_u16 {
+            assert_eq!(i as u8, chip.memory[usize::from(chip.address + i)]);
+        }
+    }
+
+    #[test]
+    fn get_binary_coded_decimal_0() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.address = 0x300;
+        chip.registers[0] = 0;
+        opcode.get_binary_coded_decimal(&mut chip, 0);
+        assert_eq!(0x202, chip.program_counter);
+        assert_eq!(chip.memory[usize::from(chip.address)], 0);
+        assert_eq!(chip.memory[usize::from(chip.address + 1)], 0);
+        assert_eq!(chip.memory[usize::from(chip.address + 2)], 0);
+    }
+
+    #[test]
+    fn get_binary_coded_decimal_255() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.address = 0x300;
+        chip.registers[0] = 255;
+        opcode.get_binary_coded_decimal(&mut chip, 0);
+        assert_eq!(0x202, chip.program_counter);
+        assert_eq!(chip.memory[usize::from(chip.address)], 2);
+        assert_eq!(chip.memory[usize::from(chip.address + 1)], 5);
+        assert_eq!(chip.memory[usize::from(chip.address + 2)], 5);
+    }
+
+    #[test]
+    fn get_font_sprite_addr() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        let mut ref_program_counter = 0x202;
+
+        for i in 0..16 {
+            println!("i {}", i);
+            chip.registers[0] = i;
+            opcode.get_font_sprite(&mut chip, 0);
+            assert_eq!(u16::from(i * 5), chip.address);
+            assert_eq!(ref_program_counter, chip.program_counter);
+            ref_program_counter += 2;
+        }
+    }
+
+    #[test]
+    fn add_to_address_no_overflow() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0x55;
+        chip.registers[0xF] = 0x1;
+        chip.address = 0x100;
+        opcode.add_vx_to_address_register(&mut chip, 0);
+        assert_eq!(0x155, chip.address);
+        assert_eq!(0x0, chip.registers[0xF]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    fn add_to_address_overflow() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 0x1;
+        chip.registers[0xF] = 0x0;
+        chip.address = 0xFFFF;
+        opcode.add_vx_to_address_register(&mut chip, 0);
+        assert_eq!(0x0, chip.address);
+        assert_eq!(0x1, chip.registers[0xF]);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    fn set_sound_timer() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 55;
+        opcode.set_sound_timer(&mut chip, 0);
+        assert_eq!(55, chip.sound_timer);
+        assert_eq!(0x202, chip.program_counter);
+    }
+
+    #[test]
+    fn set_delay_timer() {
+        let (mut chip, opcode) = chip_opcode();
+        chip.program_counter = 0x200;
+        chip.registers[0] = 55;
+        opcode.set_delay_timer(&mut chip, 0);
+        assert_eq!(55, chip.delay_timer);
+        assert_eq!(0x202, chip.program_counter);
+    }
 
     #[test]
     fn get_key() {

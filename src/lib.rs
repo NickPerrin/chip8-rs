@@ -31,7 +31,7 @@ impl Default for Chip {
 impl Chip {
     /// Create a new, default initialized Chip struct
     pub fn new() -> Chip {
-        Chip {
+        let mut chip = Chip {
             memory: vec![0; 0xFFF],
             stack: stack::Stack::new(16),
             registers: vec![0; 16],
@@ -47,7 +47,33 @@ impl Chip {
             screen_height: SCREEN_HEIGHT,
             delay_timer: 0,
             sound_timer: 0,
-        }
+        };
+        chip.init_fonts();
+        chip
+    }
+
+    /// Initialize fonts
+    fn init_fonts(&mut self) {
+        let fonts: [u8; 16 * 5] = [
+            0xF0, 0x90, 0x90, 0x90, 0xf0, // 0
+            0x20, 0x60, 0x20, 0x20, 0x70, // 1
+            0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+            0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+            0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+            0xF0, 0x80, 0xF0, 0x10, 0x10, // 5
+            0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+            0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+            0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+            0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+            0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+            0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+            0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+            0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+            0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+        ];
+
+        self.memory[0..16 * 5].copy_from_slice(&fonts);
     }
 
     /// Reset the Chip
@@ -113,5 +139,11 @@ mod tests {
 
         c.reset();
         assert_eq!(c, Chip::new());
+    }
+
+    #[test]
+    fn init_fonts() {
+        let c = Chip::new();
+        assert_eq!(c.memory[0], 0xF0);
     }
 }
