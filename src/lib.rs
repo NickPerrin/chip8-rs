@@ -1,3 +1,6 @@
+use std::fs;
+use std::io;
+use std::io::Read;
 use std::vec::Vec;
 pub mod opcode;
 pub mod stack;
@@ -27,7 +30,7 @@ impl Default for Chip {
         Chip::new()
     }
 }
-
+                
 impl Chip {
     /// Create a new, default initialized Chip struct
     pub fn new() -> Chip {
@@ -50,6 +53,21 @@ impl Chip {
         };
         chip.init_fonts();
         chip
+    }
+
+    pub fn load_rom(&mut self, file: &str) -> Result<(), io::Error> {
+        static MAX_ROM_SIZE: usize = 0x400;
+        let mut f = fs::File::open(&file)?;
+        f.read_to_end(&mut self.memory)?;
+
+        // verify the rom fits into memory region
+        if self.memory.len() > MAX_ROM_SIZE {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Rom file too large",
+            ));
+        }
+        Ok(())
     }
 
     /// Initialize fonts
