@@ -4,7 +4,11 @@ use std::env;
 fn main() {
     if let Some(rom_filename) = get_file_from_cli() {
         let mut chip = chip8_rs::Chip::new();
-        chip.load_rom(&rom_filename).unwrap(); // @todo replace unwrap
+
+        match chip.load_rom(&rom_filename) {
+            Ok(_) => println!("starting emulator"),
+            Err(error) => eprintln!("Error loading rom: {}", error),
+        }
     } else {
         eprintln!("Unable to parse rom filename");
     }

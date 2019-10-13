@@ -30,7 +30,7 @@ impl Default for Chip {
         Chip::new()
     }
 }
-                
+
 impl Chip {
     /// Create a new, default initialized Chip struct
     pub fn new() -> Chip {
@@ -58,10 +58,9 @@ impl Chip {
     pub fn load_rom(&mut self, file: &str) -> Result<(), io::Error> {
         static MAX_ROM_SIZE: usize = 0x400;
         let mut f = fs::File::open(&file)?;
-        f.read_to_end(&mut self.memory)?;
 
-        // verify the rom fits into memory region
-        if self.memory.len() > MAX_ROM_SIZE {
+        let bytes_read = f.read(&mut self.memory[0x200..])?;
+        if bytes_read > MAX_ROM_SIZE {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Rom file too large",
