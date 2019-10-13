@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 rand = "0.7.2"
+piston_window = "0.105.0"
