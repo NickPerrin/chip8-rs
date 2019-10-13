@@ -141,6 +141,37 @@ impl Chip {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::{remove_file, File};
+    use std::io::Write;
+
+    #[test]
+    fn load_rom_normal() -> Result<(), io::Error> {
+        let mut c = Chip::new();
+        let filename = "./test.c8";
+        let mut f = File::create(filename)?;
+        let data = vec![1; 0x400];
+
+        f.write(&data[..])?;
+        c.load_rom(filename)?;
+
+        for i in 0x200..0x600 {
+            assert_eq!(c.memory[i], 1);
+        }
+        remove_file(filename)?;
+        Ok(())
+    }
+
+    #[test]
+    #[should_panic]
+    fn load_rom_too_big() {
+        let mut c = Chip::new();
+        let filename = "./test.c8";
+        let mut f = File::create(filename).unwrap();
+        let data = vec![1; 0x401];
+
+        f.write(&data[..]).unwrap();
+        c.load_rom(filename).unwrap();
+    }
 
     #[test]
     fn reset_chip() {

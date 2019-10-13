@@ -2,3 +2,5 @@
 **/*.rs.bk
 Cargo.lock
 roms/
+*.c8
+*.ch8
