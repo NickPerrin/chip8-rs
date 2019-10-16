@@ -6,24 +6,31 @@ use std::vec::Vec;
 pub mod opcode;
 pub mod stack;
 
-const SCREEN_WIDTH: u8 = 64;
-const SCREEN_HEIGHT: u8 = 32;
+//const SCREEN_WIDTH: usize = 64;
+//const SCREEN_HEIGHT: usize = 32;
 
-struct RomWindow {
-    window: minifb::Window,
+#[derive(Debug)]
+pub struct RomWindow {
+    pub window: minifb::Window,
+    pub scale_factor: u8,
+    screen_width: usize,
+    screen_height: usize,
 }
 
-trait DisplayWindow {
+pub trait DisplayWindow {
     fn update(&mut self, buffer: &[u8]);
 }
 
 impl RomWindow {
-    pub fn new() -> RomWindow {
+    pub fn new(scale_factor: u8, filename: &str, chip: &Chip) -> RomWindow {
         RomWindow {
+            scale_factor,
+            screen_width: chip.screen_width,
+            screen_height: chip.screen_height,
             window: Window::new(
-                "chip8-rs",
-                usize::from(SCREEN_WIDTH),
-                usize::from(SCREEN_HEIGHT),
+                filename,
+                usize::from(chip.screen_width * scale_factor as usize),
+                usize::from(chip.screen_height * scale_factor as usize),
                 WindowOptions::default(),
             )
             .expect("Unable to "),
@@ -39,19 +46,30 @@ impl RomWindow {
     }
 
     /// Expand a single byte to a partial screen buffer
-    fn expand_byte(byte: u8) -> Vec<u32> {
-        let mut partial_buffer: Vec<u32> = Vec::with_capacity(8);
+    fn expand_byte(&self, byte: u8) -> Vec<u32> {
+        let mut partial_buffer: Vec<u32> =
+            Vec::with_capacity(8 * self.scale_factor as usize);
         for i in (0..=7).rev() {
             let bit = (byte >> i) & 0x1;
-            partial_buffer.push(RomWindow::bit_to_u32(bit));
+            for _ in 0..self.scale_factor {
+                partial_buffer.push(RomWindow::bit_to_u32(bit));
+            }
         }
         partial_buffer
     }
 
-    fn expand_screen_buffer(buffer: &[u8]) -> Vec<u32> {
+    fn expand_screen_buffer(&self, buffer: &[u8]) -> Vec<u32> {
         let mut screen_buffer: Vec<u32> = Vec::with_capacity(buffer.len() * 8);
-        for pixel in buffer.iter() {
-            screen_buffer.append(&mut RomWindow::expand_byte(*pixel));
+        for y in 0..self.screen_height {
+            for _ in 0..self.scale_factor {
+                for x in 0..(self.screen_width / 8) {
+                    screen_buffer.append(
+                        &mut self.expand_byte(
+                            buffer[x + (y * self.screen_width / 8)],
+                        ),
+                    );
+                }
+            }
         }
         screen_buffer
     }
@@ -60,14 +78,13 @@ impl RomWindow {
 impl DisplayWindow for RomWindow {
     fn update(&mut self, buffer: &[u8]) {
         self.window
-            .update_with_buffer(&RomWindow::expand_screen_buffer(&buffer))
-            .expect("Error updating the display");
+            .update_with_buffer(&self.expand_screen_buffer(&buffer))
+            .expect("Error updating the display\n");
     }
 }
 
 /// This represents the state of the chip-8 system including memory,
 /// call stack, general purpose registers, program counter and screen buffer
-#[derive(PartialEq, Debug)]
 pub struct Chip {
     memory: Vec<u8>,
     stack: stack::Stack<u16>,
@@ -75,22 +92,22 @@ pub struct Chip {
     address: u16,
     program_counter: u16,
     keys: Vec<bool>,
-    screen_buffer: Vec<u8>,
-    screen_width: u8,
-    screen_height: u8,
+    pub screen_buffer: Vec<u8>,
+    screen_width: usize,
+    screen_height: usize,
     sound_timer: u8,
     delay_timer: u8,
 }
 
 impl Default for Chip {
     fn default() -> Chip {
-        Chip::new()
+        Chip::new(64, 32)
     }
 }
 
 impl Chip {
     /// Create a new, default initialized Chip struct
-    pub fn new() -> Chip {
+    pub fn new(screen_width: usize, screen_height: usize) -> Chip {
         let mut chip = Chip {
             memory: vec![0; 0xFFF],
             stack: stack::Stack::new(16),
@@ -100,12 +117,12 @@ impl Chip {
             keys: vec![false; 16],
             screen_buffer: vec![
                 0;
-                usize::from(SCREEN_WIDTH)
-                    * usize::from(SCREEN_HEIGHT)
+                usize::from(screen_width)
+                    * usize::from(screen_height)
                     / 8 // size of u8
             ],
-            screen_width: SCREEN_WIDTH,
-            screen_height: SCREEN_HEIGHT,
+            screen_width,
+            screen_height,
             delay_timer: 0,
             sound_timer: 0,
         };
@@ -153,7 +170,7 @@ impl Chip {
 
     /// Reset the Chip
     pub fn reset(&mut self) {
-        *self = Chip::new();
+        *self = Chip::new(self.screen_width, self.screen_height);
     }
 
     /// Execute a single instruction
@@ -199,7 +216,7 @@ impl Chip {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{remove_file, File};
+    use std::fs::File;
     use std::io::Write;
 
     #[test]
@@ -220,7 +237,10 @@ mod tests {
             0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
             0x00101010, 0x00101010, 0x00101010,
         ];
-        assert_eq!(expected, RomWindow::expand_byte(byte));
+        assert_eq!(
+            expected,
+            RomWindow::new(1, "", &Chip::default()).expand_byte(byte)
+        );
 
         let byte = 0b10000000;
         let expected: Vec<u32> = vec![
@@ -228,7 +248,10 @@ mod tests {
             0x00101010, 0x00101010, 0x00101010,
         ];
 
-        assert_eq!(expected, RomWindow::expand_byte(byte));
+        assert_eq!(
+            expected,
+            RomWindow::new(1, "", &Chip::default()).expand_byte(byte)
+        );
 
         let byte = 0b00000001;
         let expected: Vec<u32> = vec![
@@ -236,7 +259,10 @@ mod tests {
             0x00101010, 0x00101010, 0x00EEEEEE,
         ];
 
-        assert_eq!(expected, RomWindow::expand_byte(byte));
+        assert_eq!(
+            expected,
+            RomWindow::new(1, "", &Chip::default()).expand_byte(byte)
+        );
     }
 
     #[test]
@@ -250,30 +276,15 @@ mod tests {
             0x00101010, 0x00101010, 0x00101010, 0x00EEEEEE,
         ];
 
-        assert_eq!(expected, RomWindow::expand_screen_buffer(&chip_buffer));
-    }
+        let window = RomWindow::new(1, "", &Chip::new(24, 1));
 
-    #[test]
-    fn load_rom_normal() -> Result<(), io::Error> {
-        let mut c = Chip::new();
-        let filename = "./test.c8";
-        let mut f = File::create(filename)?;
-        let data = vec![1; 0x400];
-
-        f.write(&data[..])?;
-        c.load_rom(filename)?;
-
-        for i in 0x200..0x600 {
-            assert_eq!(c.memory[i], 1);
-        }
-        remove_file(filename)?;
-        Ok(())
+        assert_eq!(expected, window.expand_screen_buffer(&chip_buffer));
     }
 
     #[test]
     #[should_panic]
     fn load_rom_too_big() {
-        let mut c = Chip::new();
+        let mut c = Chip::default();
         let filename = "./test.c8";
         let mut f = File::create(filename).unwrap();
         let data = vec![1; 0x401];
@@ -283,24 +294,8 @@ mod tests {
     }
 
     #[test]
-    fn reset_chip() {
-        let mut c = Chip::new();
-        c.memory[1] = 2;
-        c.stack.push(2).unwrap();
-        c.registers[0xf] = 2;
-        c.address = 100;
-        c.program_counter = 1;
-        c.screen_buffer[0] = 0;
-
-        assert_ne!(c, Chip::new());
-
-        c.reset();
-        assert_eq!(c, Chip::new());
-    }
-
-    #[test]
     fn init_fonts() {
-        let c = Chip::new();
+        let c = Chip::default();
         assert_eq!(c.memory[0], 0xF0);
     }
 }

@@ -415,10 +415,10 @@ impl Opcode {
         chip.registers[0xF] = 0;
 
         for row in 0..height {
-            let chunk_index: u8 = ((chip.registers[vy] + row)
+            let chunk_index: usize = ((chip.registers[vy] + row) as usize
                 * chip.screen_width)
-                + chip.registers[vx];
-            let chunk: u8 = chip.screen_buffer[usize::from(chunk_index)];
+                + chip.registers[vx] as usize;
+            let chunk: u8 = chip.screen_buffer[chunk_index];
             let new = chip.memory[usize::from(chip.address) + usize::from(row)];
 
             chip.screen_buffer[usize::from(chunk_index)] = chunk ^ new;
@@ -805,8 +805,8 @@ mod tests {
         chip.memory[usize::from(chip.address)] = 0x00;
         chip.memory[usize::from(chip.address) + 1] = 0x01;
         chip.screen_buffer[usize::from(chip.address)] = 0xA5;
-        chip.screen_buffer
-            [usize::from(chip.address) + usize::from(chip.screen_width)] = 0x01;
+        chip.screen_buffer[usize::from(chip.address) + chip.screen_width] =
+            0x01;
 
         opcode.draw_sprite(&mut chip, 0, 1, 2);
         assert_eq!(1, chip.registers[0xF]);
@@ -1316,7 +1316,7 @@ mod tests {
     #[test]
     fn valid_registers_trivial() {
         let registers = vec![0x0];
-        let chip = Chip::new();
+        let chip = Chip::default();
         if let Ok(_) = Opcode::valid_registers(&registers, &chip) {
             assert!(true);
         } else {
@@ -1379,6 +1379,6 @@ mod tests {
     }
 
     fn chip_opcode() -> (Chip, Opcode) {
-        (Chip::new(), Opcode::new(0))
+        (Chip::default(), Opcode::new(0))
     }
 }
