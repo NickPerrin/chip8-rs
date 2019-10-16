@@ -4,3 +4,4 @@ Cargo.lock
 roms/
 *.c8
 *.ch8
+.vscode

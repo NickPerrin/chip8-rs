@@ -1,3 +1,4 @@
+use minifb::{Window, WindowOptions};
 use std::fs;
 use std::io;
 use std::io::Read;
@@ -7,6 +8,62 @@ pub mod stack;
 
 const SCREEN_WIDTH: u8 = 64;
 const SCREEN_HEIGHT: u8 = 32;
+
+struct RomWindow {
+    window: minifb::Window,
+}
+
+trait DisplayWindow {
+    fn update(&mut self, buffer: &[u8]);
+}
+
+impl RomWindow {
+    pub fn new() -> RomWindow {
+        RomWindow {
+            window: Window::new(
+                "chip8-rs",
+                usize::from(SCREEN_WIDTH),
+                usize::from(SCREEN_HEIGHT),
+                WindowOptions::default(),
+            )
+            .expect("Unable to "),
+        }
+    }
+
+    /// Convert our monochrome bit to a 32
+    fn bit_to_u32(bit: u8) -> u32 {
+        match bit {
+            0 => 0x00101010, // dark gray
+            _ => 0x00EEEEEE, // light gray
+        }
+    }
+
+    /// Expand a single byte to a partial screen buffer
+    fn expand_byte(byte: u8) -> Vec<u32> {
+        let mut partial_buffer: Vec<u32> = Vec::with_capacity(8);
+        for i in (0..=7).rev() {
+            let bit = (byte >> i) & 0x1;
+            partial_buffer.push(RomWindow::bit_to_u32(bit));
+        }
+        partial_buffer
+    }
+
+    fn expand_screen_buffer(buffer: &[u8]) -> Vec<u32> {
+        let mut screen_buffer: Vec<u32> = Vec::with_capacity(buffer.len() * 8);
+        for pixel in buffer.iter() {
+            screen_buffer.append(&mut RomWindow::expand_byte(*pixel));
+        }
+        screen_buffer
+    }
+}
+
+impl DisplayWindow for RomWindow {
+    fn update(&mut self, buffer: &[u8]) {
+        self.window
+            .update_with_buffer(&RomWindow::expand_screen_buffer(&buffer))
+            .expect("Error updating the display");
+    }
+}
 
 /// This represents the state of the chip-8 system including memory,
 /// call stack, general purpose registers, program counter and screen buffer
@@ -45,6 +102,7 @@ impl Chip {
                 0;
                 usize::from(SCREEN_WIDTH)
                     * usize::from(SCREEN_HEIGHT)
+                    / 8 // size of u8
             ],
             screen_width: SCREEN_WIDTH,
             screen_height: SCREEN_HEIGHT,
@@ -143,6 +201,57 @@ mod tests {
     use super::*;
     use std::fs::{remove_file, File};
     use std::io::Write;
+
+    #[test]
+    fn bit_to_u32() {
+        for i in 0..=255 {
+            if i == 0 {
+                assert_eq!(0x00101010, RomWindow::bit_to_u32(i));
+            } else {
+                assert_eq!(0x00EEEEEE, RomWindow::bit_to_u32(i));
+            }
+        }
+    }
+
+    #[test]
+    fn expand_byte() {
+        let byte = 0;
+        let expected: Vec<u32> = vec![
+            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00101010, 0x00101010,
+        ];
+        assert_eq!(expected, RomWindow::expand_byte(byte));
+
+        let byte = 0b10000000;
+        let expected: Vec<u32> = vec![
+            0x00EEEEEE, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00101010, 0x00101010,
+        ];
+
+        assert_eq!(expected, RomWindow::expand_byte(byte));
+
+        let byte = 0b00000001;
+        let expected: Vec<u32> = vec![
+            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00101010, 0x00EEEEEE,
+        ];
+
+        assert_eq!(expected, RomWindow::expand_byte(byte));
+    }
+
+    #[test]
+    fn expand_screen_buffer() {
+        let chip_buffer: Vec<u8> = vec![0, 0b10000000, 0b00000001];
+        let expected = vec![
+            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00101010, 0x00101010, 0x00EEEEEE, 0x00101010,
+            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00101010, 0x00101010, 0x00EEEEEE,
+        ];
+
+        assert_eq!(expected, RomWindow::expand_screen_buffer(&chip_buffer));
+    }
 
     #[test]
     fn load_rom_normal() -> Result<(), io::Error> {
