@@ -6,9 +6,6 @@ use std::vec::Vec;
 pub mod opcode;
 pub mod stack;
 
-//const SCREEN_WIDTH: usize = 64;
-//const SCREEN_HEIGHT: usize = 32;
-
 #[derive(Debug)]
 pub struct RomWindow {
     pub window: minifb::Window,
@@ -29,19 +26,19 @@ impl RomWindow {
             screen_height: chip.screen_height,
             window: Window::new(
                 filename,
-                usize::from(chip.screen_width * scale_factor as usize),
-                usize::from(chip.screen_height * scale_factor as usize),
+                chip.screen_width * scale_factor as usize,
+                chip.screen_height * scale_factor as usize,
                 WindowOptions::default(),
             )
-            .expect("Unable to "),
+            .expect("Unable to create RomWindow"),
         }
     }
 
-    /// Convert our monochrome bit to a 32
+    /// Convert our monochrome bit to a 32 bit integer
     fn bit_to_u32(bit: u8) -> u32 {
         match bit {
-            0 => 0x00101010, // dark gray
-            _ => 0x00EEEEEE, // light gray
+            0 => 0x0010_1010, // dark gray
+            _ => 0x00EE_EEEE, // light gray
         }
     }
 
@@ -117,8 +114,8 @@ impl Chip {
             keys: vec![false; 16],
             screen_buffer: vec![
                 0;
-                usize::from(screen_width)
-                    * usize::from(screen_height)
+                screen_width
+                    * screen_height
                     / 8 // size of u8
             ],
             screen_width,
@@ -175,8 +172,8 @@ impl Chip {
 
     /// Execute a single instruction
     pub fn tick(&mut self) {
-        self.delay_timer = self.delay_timer.checked_sub(1).unwrap_or(0);
-        self.sound_timer = self.sound_timer.checked_sub(1).unwrap_or(0);
+        self.delay_timer = self.delay_timer.saturating_sub(1);
+        self.sound_timer = self.sound_timer.saturating_sub(1);
 
         let opcode = self.get_next_opcode();
         opcode.decode_execute(self);

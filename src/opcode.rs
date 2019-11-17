@@ -421,7 +421,7 @@ impl Opcode {
             let chunk: u8 = chip.screen_buffer[chunk_index];
             let new = chip.memory[usize::from(chip.address) + usize::from(row)];
 
-            chip.screen_buffer[usize::from(chunk_index)] = chunk ^ new;
+            chip.screen_buffer[chunk_index] = chunk ^ new;
             if Opcode::pixel_collision(chunk, new) {
                 chip.registers[0xF] = 1;
                 break;
