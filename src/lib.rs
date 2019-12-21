@@ -76,13 +76,13 @@ impl DisplayWindow for RomWindow {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum KeyState {
     Pressed,
     NotPressed,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Key {
     pub state: KeyState,
 }
@@ -104,7 +104,7 @@ pub struct Chip {
     registers: Vec<u8>,
     address: u16,
     program_counter: u16,
-    keys: Vec<Key>,
+    pub keys: Vec<Key>,
     pub screen_buffer: Vec<u8>,
     screen_width: usize,
     screen_height: usize,
