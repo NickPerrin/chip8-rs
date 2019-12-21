@@ -44,8 +44,7 @@ impl RomWindow {
 
     /// Expand a single byte to a partial screen buffer
     fn expand_byte(&self, byte: u8) -> Vec<u32> {
-        let mut partial_buffer: Vec<u32> =
-            Vec::with_capacity(8 * self.scale_factor as usize);
+        let mut partial_buffer: Vec<u32> = Vec::with_capacity(8 * self.scale_factor as usize);
         for i in (0..=7).rev() {
             let bit = (byte >> i) & 0x1;
             for _ in 0..self.scale_factor {
@@ -60,11 +59,8 @@ impl RomWindow {
         for y in 0..self.screen_height {
             for _ in 0..self.scale_factor {
                 for x in 0..(self.screen_width / 8) {
-                    screen_buffer.append(
-                        &mut self.expand_byte(
-                            buffer[x + (y * self.screen_width / 8)],
-                        ),
-                    );
+                    screen_buffer
+                        .append(&mut self.expand_byte(buffer[x + (y * self.screen_width / 8)]));
                 }
             }
         }
@@ -80,15 +76,35 @@ impl DisplayWindow for RomWindow {
     }
 }
 
+#[derive(Clone)]
+pub enum KeyState {
+    Pressed,
+    NotPressed,
+}
+
+#[derive(Clone)]
+pub struct Key {
+    pub state: KeyState,
+}
+
+impl Key {
+    pub fn is_pressed(&self) -> bool {
+        match self.state {
+            KeyState::Pressed => true,
+            KeyState::NotPressed => false,
+        }
+    }
+}
+
 /// This represents the state of the chip-8 system including memory,
-/// call stack, general purpose registers, program counter and screen buffer
+/// call stack, general purpose registers, program counter, and screen buffer
 pub struct Chip {
     memory: Vec<u8>,
     stack: stack::Stack<u16>,
     registers: Vec<u8>,
     address: u16,
     program_counter: u16,
-    keys: Vec<bool>,
+    keys: Vec<Key>,
     pub screen_buffer: Vec<u8>,
     screen_width: usize,
     screen_height: usize,
@@ -111,7 +127,12 @@ impl Chip {
             registers: vec![0; 16],
             address: 0,
             program_counter: 0x200,
-            keys: vec![false; 16],
+            keys: vec![
+                Key {
+                    state: KeyState::NotPressed
+                };
+                16
+            ],
             screen_buffer: vec![
                 0;
                 screen_width
@@ -125,6 +146,19 @@ impl Chip {
         };
         chip.init_fonts();
         chip
+    }
+
+    pub fn update_keys(&mut self, mut keys: Vec<Key>) {
+        // keys is expected to have a length of 16. Anything longer is truncated, anything shorter
+        // is padded with unpressed
+        keys.truncate(self.keys.len());
+        while keys.len() < self.keys.len() {
+            keys.push(Key {
+                state: KeyState::NotPressed,
+            });
+        }
+
+        self.keys = keys;
     }
 
     pub fn load_rom(&mut self, file: &str) -> Result<(), io::Error> {
@@ -202,7 +236,7 @@ impl Chip {
     /// Get the first pressed key from the keyboard
     fn get_pressed_key(&self) -> Option<usize> {
         for key in 0..self.keys.len() {
-            if self.keys[key] {
+            if self.keys[key].is_pressed() {
                 return Some(key);
             }
         }
@@ -231,8 +265,8 @@ mod tests {
     fn expand_byte() {
         let byte = 0;
         let expected: Vec<u32> = vec![
-            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
-            0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010,
         ];
         assert_eq!(
             expected,
@@ -241,8 +275,8 @@ mod tests {
 
         let byte = 0b10000000;
         let expected: Vec<u32> = vec![
-            0x00EEEEEE, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
-            0x00101010, 0x00101010, 0x00101010,
+            0x00EEEEEE, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010,
         ];
 
         assert_eq!(
@@ -252,8 +286,8 @@ mod tests {
 
         let byte = 0b00000001;
         let expected: Vec<u32> = vec![
-            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
-            0x00101010, 0x00101010, 0x00EEEEEE,
+            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00EEEEEE,
         ];
 
         assert_eq!(
@@ -266,11 +300,10 @@ mod tests {
     fn expand_screen_buffer() {
         let chip_buffer: Vec<u8> = vec![0, 0b10000000, 0b00000001];
         let expected = vec![
-            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
-            0x00101010, 0x00101010, 0x00101010, 0x00EEEEEE, 0x00101010,
-            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
-            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
-            0x00101010, 0x00101010, 0x00101010, 0x00EEEEEE,
+            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00EEEEEE, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010, 0x00101010,
+            0x00101010, 0x00101010, 0x00EEEEEE,
         ];
 
         let window = RomWindow::new(1, "", &Chip::new(24, 1));
@@ -294,5 +327,23 @@ mod tests {
     fn init_fonts() {
         let c = Chip::default();
         assert_eq!(c.memory[0], 0xF0);
+    }
+
+    #[test]
+    fn key_is_pressed() {
+        let key = Key {
+            state: KeyState::Pressed,
+        };
+        let result = key.is_pressed();
+        assert!(result);
+    }
+
+    #[test]
+    fn key_is_not_pressed() {
+        let key = Key {
+            state: KeyState::NotPressed,
+        };
+        let result = key.is_pressed();
+        assert!(!result);
     }
 }
