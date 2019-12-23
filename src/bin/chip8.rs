@@ -95,7 +95,6 @@ fn main() {
 
         let scale_factor = 10_u8;
         let mut display = chip8_rs::RomWindow::new(scale_factor, &rom_filename, &chip);
-        chip.screen_buffer[0] = 0xF0;
 
         // @todo figure out how to call tick at <refresh rate> Hz
         let refresh_delay = time::Duration::from_millis(16_u64);
