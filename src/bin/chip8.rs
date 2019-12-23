@@ -2,6 +2,7 @@ use chip8_rs;
 use chip8_rs::{DisplayWindow, Key, KeyState};
 use minifb;
 use std::env;
+use std::{thread, time};
 
 /// Get the filename from the command line.
 /// Fragile implementation, either use clap or some kind of ui to choose a rom
@@ -22,7 +23,7 @@ fn get_file_from_cli() -> Option<String> {
 /// | A / 0 / B / F |
 /// -----------------
 /// Optionally returns the chip8 index of the key pressed
-fn map_key(key: &minifb::Key) -> Option<usize> {
+fn map_key(key: minifb::Key) -> Option<usize> {
     match key {
         minifb::Key::Key1 => Some(0x1_usize),
         minifb::Key::Key2 => Some(0x2_usize),
@@ -59,7 +60,7 @@ fn map_keys(keys: Vec<minifb::Key>) -> Vec<Key> {
     ];
 
     for key in keys.iter() {
-        if let Some(index) = map_key(key) {
+        if let Some(index) = map_key(*key) {
             chip_keys[index].state = KeyState::Pressed;
         }
     }
@@ -74,7 +75,13 @@ fn tick(chip: &mut chip8_rs::Chip, display: &mut chip8_rs::RomWindow) {
         chip.update_keys(map_keys(keys));
     }
 
-    println!("{:?}", chip.keys);
+    // Execute the next instruction
+    chip.tick();
+
+    // Update the display
+    if display.window.is_open() && !display.window.is_key_down(minifb::Key::Escape) {
+        display.update(&chip.screen_buffer);
+    }
 }
 
 fn main() {
@@ -86,14 +93,16 @@ fn main() {
             Err(error) => eprintln!("Error loading rom: {}", error),
         }
 
-        // @todo remove
         let scale_factor = 10_u8;
         let mut display = chip8_rs::RomWindow::new(scale_factor, &rom_filename, &chip);
         chip.screen_buffer[0] = 0xF0;
-        while display.window.is_open() && !display.window.is_key_down(minifb::Key::Escape) {
-            display.update(&chip.screen_buffer);
+
+        // @todo figure out how to call tick at <refresh rate> Hz
+        let refresh_delay = time::Duration::from_millis(16_u64);
+        loop {
+            tick(&mut chip, &mut display);
+            thread::sleep(refresh_delay);
         }
-        tick(&mut chip, &mut display);
     } else {
         eprintln!("Unable to parse rom filename");
     }
