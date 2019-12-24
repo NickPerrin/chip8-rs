@@ -1,6 +1,7 @@
 use chip8_rs;
 use chip8_rs::{DisplayWindow, Key, KeyState};
 use minifb;
+use std::convert::TryFrom;
 use std::env;
 use std::{thread, time};
 
@@ -70,7 +71,7 @@ fn map_keys(keys: Vec<minifb::Key>) -> Vec<Key> {
 
 /// Execute an atomic step through the system. Read user input, execute a cpu instruction, update
 /// the display.
-fn tick(chip: &mut chip8_rs::Chip, display: &mut chip8_rs::RomWindow) {
+fn tick(chip: &mut chip8_rs::Chip, display: &mut chip8_rs::RomWindow) -> Option<()> {
     if let Some(keys) = display.window.get_keys() {
         chip.update_keys(map_keys(keys));
     }
@@ -81,7 +82,47 @@ fn tick(chip: &mut chip8_rs::Chip, display: &mut chip8_rs::RomWindow) {
     // Update the display
     if display.window.is_open() && !display.window.is_key_down(minifb::Key::Escape) {
         display.update(&chip.screen_buffer);
+        return Some(());
     }
+    None
+}
+
+/// Convert a given refresh rate into the corresponding delay between frames. Only 'reasonable'
+/// refresh rates will be used. Reasonable is defined as [20, 300]. Anything outside of this range
+/// will be set to the default of 60Hz
+fn refresh_rate_to_delay_milliseconds(refresh_rate: u16) -> u64 {
+    let mut f64_refresh_delay = 60_f64;
+    if let Ok(f64_refresh_rate) = f64::try_from(refresh_rate) {
+        if f64_refresh_rate >= 20_f64 && f64_refresh_rate <= 300_f64 {
+            f64_refresh_delay = (1_f64 / f64_refresh_rate) * 1000_f64;
+        }
+    }
+
+    // f64_refresh_delay is guarenteed to be positive and smaller than max<u64> so we can truncate
+    // and convert to u64 without fear
+    f64_refresh_delay as u64
+}
+
+/// Call tick at a given refresh rate. This is the default mode of execution for the emulator.
+///
+/// A note about timing: The refresh rate parameter deterimes the delay applied uniformly after
+///                      call to tick(). This means that each call to tick() is assumed to take no
+///                      time. So the practical refresh rate will be always be lower than the
+///                      confgured refresh reate. This could be fixed by timing the call to tick()
+///                      and dynamically adjusting the delay for a fixed refresh rate, assuming
+///                      tick() doesn't take too long. I seriously doubt that this will matter, so
+///                      I probably won't bother.
+fn run(refresh_rate: u16, mut chip: chip8_rs::Chip, mut display: chip8_rs::RomWindow) {
+    let refresh_delay =
+        time::Duration::from_millis(refresh_rate_to_delay_milliseconds(refresh_rate));
+    while let Some(_) = tick(&mut chip, &mut display) {
+        thread::sleep(refresh_delay);
+    }
+}
+
+fn run_debug(mut chip: chip8_rs::Chip, mut display: chip8_rs::RomWindow) {
+    // @todo create debugger module with single step, various print modes, restart, and handoff
+    // @todo add capability to write to memory and registers
 }
 
 fn main() {
@@ -94,14 +135,9 @@ fn main() {
         }
 
         let scale_factor = 10_u8;
-        let mut display = chip8_rs::RomWindow::new(scale_factor, &rom_filename, &chip);
+        let display = chip8_rs::RomWindow::new(scale_factor, &rom_filename, &chip);
 
-        // @todo figure out how to call tick at <refresh rate> Hz
-        let refresh_delay = time::Duration::from_millis(16_u64);
-        loop {
-            tick(&mut chip, &mut display);
-            thread::sleep(refresh_delay);
-        }
+        run(60, chip, display);
     } else {
         eprintln!("Unable to parse rom filename");
     }
