@@ -2,8 +2,9 @@ use chip8_rs;
 use chip8_rs::{DisplayWindow, Key, KeyState};
 use minifb;
 use std::convert::TryFrom;
-use std::env;
-use std::{thread, time};
+use std::{env, process, thread, time};
+
+use chip8_rs::debugger::{Chip8Debugger, Debugger};
 
 /// Get the filename from the command line.
 /// Fragile implementation, either use clap or some kind of ui to choose a rom
@@ -122,7 +123,21 @@ fn run(refresh_rate: u16, mut chip: chip8_rs::Chip, mut display: chip8_rs::RomWi
 
 fn run_debug(mut chip: chip8_rs::Chip, mut display: chip8_rs::RomWindow) {
     // @todo create debugger module with single step, various print modes, restart, and handoff
-    // @todo add capability to write to memory and registers
+    // @todo add capability to write to memory and registers. Currently chip is 'read only'
+
+    let debugger = chip8_rs::debugger::Chip8Debugger::new(&chip);
+    debugger.welcome();
+    loop {
+        if let Some(command) = debugger.get_user_input() {
+            // TODO
+            //  if step, call tick(),
+            //  if continue, pass control to run,
+            //  if quit, break and return,
+            println!("valid command: {:?}", command);
+        } else {
+            println!("Invalid command. Use help (h) to show valid commands");
+        }
+    }
 }
 
 fn main() {
@@ -131,13 +146,18 @@ fn main() {
 
         match chip.load_rom(&rom_filename) {
             Ok(_) => println!("starting application {}", rom_filename),
-            Err(error) => eprintln!("Error loading rom: {}", error),
+            Err(error) => {
+                eprintln!("Error loading rom: {}", error);
+                process::exit(1);
+            }
         }
 
         let scale_factor = 10_u8;
         let display = chip8_rs::RomWindow::new(scale_factor, &rom_filename, &chip);
 
-        run(60, chip, display);
+        // TODO add better cmdline parsing, add debug option
+        run_debug(chip, display);
+    //run(60, chip, display);
     } else {
         eprintln!("Unable to parse rom filename");
     }

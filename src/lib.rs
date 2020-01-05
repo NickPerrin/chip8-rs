@@ -3,6 +3,7 @@ use std::fs;
 use std::io;
 use std::io::Read;
 use std::vec::Vec;
+pub mod debugger;
 pub mod opcode;
 pub mod stack;
 
