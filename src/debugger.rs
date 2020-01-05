@@ -58,17 +58,27 @@ impl<'a> Debugger for Chip8Debugger<'a> {
 
         let mut user_line = String::new();
         match io::stdin().read_line(&mut user_line) {
-            Ok(bytes_read) => println!("valid"),
-            Err(error) => println!("error: {}", error),
+            Ok(bytes_read) => self.get_token(&user_line),
+            Err(error) => {
+                println!("error: {}", error);
+                None
+            }
         }
-
-        None
     }
 }
 
 impl<'a> Chip8Debugger<'a> {
     pub fn new(chip: &'a Chip) -> Chip8Debugger<'a> {
         Chip8Debugger { chip }
+    }
+
+    fn get_token(&self, input: &String) -> Option<Command> {
+        // Parse the first command from the input string.
+        let mut tokens = input.split_ascii_whitespace();
+        for token in tokens {
+            println!("{}", token);
+        }
+        None
     }
 
     pub fn welcome(&self) {
